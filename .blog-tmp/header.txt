@@ -1,0 +1,3 @@
+import type { ScheduledPost } from "./types";
+
+export const batch2: ScheduledPost[] = [

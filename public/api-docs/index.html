@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>مستندات API — هوش</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
+  <style>
+    body { margin: 0; font-family: 'Vazirmatn', 'Segoe UI', Tahoma, sans-serif; }
+    .swagger-ui { direction: rtl; }
+    .topbar { background-color: #4f46e5 !important; }
+    .swagger-ui .topbar .download-url-wrapper { display: none; }
+    .header-banner {
+      background: linear-gradient(135deg, #4f46e5, #6366f1);
+      color: white;
+      padding: 16px 24px;
+      font-size: 14px;
+      text-align: center;
+    }
+    .header-banner a { color: #c7d2fe; text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="header-banner">
+    مستندات رسمی API عمومی هوش — برای دریافت API key به
+    <a href="/partner-program">پورتال همکاران</a>
+    مراجعه کنید.
+  </div>
+  <div id="swagger-ui"></div>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script>
+    window.onload = function() {
+      SwaggerUIBundle({
+        url: '/api-docs/openapi.json',
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        presets: [SwaggerUIBundle.presets.apis],
+        layout: 'BaseLayout',
+        docExpansion: 'list',
+        filter: true,
+        showExtensions: true,
+        showCommonExtensions: true,
+        defaultModelsExpandDepth: 2,
+        operationsSorter: 'alpha',
+        tagsSorter: 'alpha',
+      });
+    };
+  </script>
+</body>
+</html>

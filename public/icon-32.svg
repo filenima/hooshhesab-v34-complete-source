@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="لوگوی هوش — نرم‌افزار حسابداری هوشمند">
+  <defs>
+    <!-- کاشی زمرد→تیل با عمق چندلایه -->
+    <linearGradient id="hoosh-tile" x1="0.06" y1="0.02" x2="0.94" y2="0.98">
+      <stop offset="0" stop-color="#6ee7b7"/>
+      <stop offset="0.22" stop-color="#34d399"/>
+      <stop offset="0.5" stop-color="#10b981"/>
+      <stop offset="0.78" stop-color="#0d9488"/>
+      <stop offset="1" stop-color="#115e59"/>
+    </linearGradient>
+    <!-- نور محیطی بالای کاشی -->
+    <radialGradient id="hoosh-toplight" cx="0.28" cy="0.1" r="0.75">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.26"/>
+      <stop offset="0.55" stop-color="#ffffff" stop-opacity="0.06"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <!-- بازتاب شیشه‌ای مورب -->
+    <linearGradient id="hoosh-sheen" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.16"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.05"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <!-- طلای میله‌های رشد -->
+    <linearGradient id="hoosh-gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fef3c7"/>
+      <stop offset="0.45" stop-color="#fbbf24"/>
+      <stop offset="1" stop-color="#d97706"/>
+    </linearGradient>
+    <!-- جرقه هوش -->
+    <linearGradient id="hoosh-spark" x1="0" y1="0" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#fef9c3"/>
+      <stop offset="0.5" stop-color="#fbbf24"/>
+      <stop offset="1" stop-color="#f59e0b"/>
+    </linearGradient>
+    <!-- هاله جرقه -->
+    <radialGradient id="hoosh-glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#fbbf24" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#fbbf24" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="hoosh-tileclip">
+      <rect x="16" y="16" width="480" height="480" rx="126"/>
+    </clipPath>
+  </defs>
+
+  <!-- ===== پس‌زمینه (در نسخه maskable تمام‌صفحه می‌ماند) ===== -->
+  <g id="hoosh-bg">
+    <rect x="16" y="16" width="480" height="480" rx="126" fill="url(#hoosh-tile)"/>
+    <g clip-path="url(#hoosh-tileclip)">
+      <rect x="16" y="16" width="480" height="480" fill="url(#hoosh-toplight)"/>
+      <rect x="-40" y="-60" width="400" height="320" transform="rotate(26 160 100)" fill="url(#hoosh-sheen)"/>
+    </g>
+    <rect x="24" y="24" width="464" height="464" rx="118" fill="none" stroke="#ffffff" stroke-opacity="0.16" stroke-width="3"/>
+  </g>
+
+  <!-- ===== محتوا: حرف «ه» + میله‌های رشد + جرقه هوش ===== -->
+  <g id="hoosh-content">
+    <!-- حرف «ه» هندسی: حلقه نشسته روی خط مبنا + دنباله خط مبنا -->
+    <g fill="none" stroke="#ffffff" stroke-width="58" stroke-linecap="round">
+      <path d="M 125 343 H 272"/>
+      <path d="M 275.3 340.8 A 98 98 0 1 0 216.1 270.4"/>
+    </g>
+    <!-- میله‌های طلایی رشد درون کاسه حرف -->
+    <g fill="url(#hoosh-gold)">
+      <rect x="286" y="262" width="20" height="28" rx="9"/>
+      <rect x="316" y="236" width="20" height="54" rx="9"/>
+      <rect x="346" y="212" width="20" height="78" rx="9"/>
+    </g>
+    <!-- مدار و جرقه هوش -->
+    <ellipse cx="416" cy="102" rx="64" ry="22" transform="rotate(-22 416 102)" fill="none" stroke="#ffffff" stroke-opacity="0.32" stroke-width="3"/>
+    <circle cx="416" cy="102" r="54" fill="url(#hoosh-glow)"/>
+    <path d="M 416 54 Q 419 97 448 102 Q 421 107 416 150 Q 411 107 384 102 Q 411 97 416 54 Z" fill="url(#hoosh-spark)"/>
+  </g>
+</svg>

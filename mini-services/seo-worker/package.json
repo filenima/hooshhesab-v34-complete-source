@@ -1,0 +1,9 @@
+{
+  "name": "hoosh-seo-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "موتور مستقل تولید مقالهٔ سئو هوش — جدا از سرور Next.js تا از ری‌استارت‌های سندباکس مصون بماند",
+  "scripts": {
+    "dev": "bun --hot index.ts"
+  }
+}

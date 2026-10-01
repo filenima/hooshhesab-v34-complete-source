@@ -1,0 +1,1596 @@
+// Prisma schema (PostgreSQL variant) — هوش‌حساب AI-Powered Accounting Platform
+// PostgreSQL datasource with native types:
+//   - @db.Text       for long-form text (descriptions, snapshots, HTML bodies)
+//   - @db.Numeric(18,2) for monetary BigInt amounts (ریال — kept as numeric for clarity)
+//   - @db.Timestamptz for DateTime fields (timezone-aware)
+//   -       for JSON-encoded columns (steps, conditions, metadata)
+//
+// To use this schema:
+//   1) Set DATABASE_URL to a postgresql:// connection string
+//   2) Run: bunx prisma db push --schema=prisma/schema.postgres.prisma
+//   3) Or: bunx prisma migrate dev --schema=prisma/schema.postgres.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============ Tenant (سازمان/شرکت) ============
+model Tenant {
+  id          String   @id @default(cuid())
+  name String  @db.Text
+  subdomain   String?  @unique
+  plan        String   @default("starter") // starter | business | enterprise | accountant
+  status      String   @default("active") // active | suspended | cancelled
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+
+  users              User[]
+  accountGroups     AccountGroup[]
+  accounts          Account[]
+  subAccounts       SubAccount[]
+  detailAccounts    DetailAccount[]
+  journalEntries    JournalEntry[]
+  fiscalYears       FiscalYear[]
+  costCenters       CostCenter[]
+  warehouses        Warehouse[]
+  productCategories ProductCategory[]
+  products          Product[]
+  stockItems        StockItem[]
+  stockMovements    StockMovement[]
+  parties           Party[]
+  invoices          Invoice[]
+  bankAccounts      BankAccount[]
+  checks            Check[]
+  pettyCash         PettyCash[]
+  loans             Loan[]
+  employees         Employee[]
+  payrolls          Payroll[]
+  contacts          Contact[]
+  followUps         FollowUp[]
+  reminders         Reminder[]
+  loyaltyMembers    LoyaltyMember[]
+  boms              BOM[]
+  productionOrders  ProductionOrder[]
+  projects          Project[]
+  aiConversations   AIConversation[]
+  auditLogs         AuditLog[]
+  webhooks          Webhook[]
+  integrations      Integration[]
+  supportTickets    SupportTicket[]
+  licenses          License[]
+  ecosystemConnections EcosystemConnection[]
+  tenantMembers     TenantMember[]
+  apiKeys           ApiKey[]
+  budgets           Budget[]
+  emailTemplates    EmailTemplate[]
+  workflows         Workflow[]
+  savedSearches     SavedSearch[]
+  tags              Tag[]
+  documentVersions  DocumentVersion[]
+  documentTemplates DocumentTemplate[]
+  ecosystemWebhooks EcosystemWebhook[]
+  pushSubscriptions PushSubscription[]
+  emailSequenceEnrollments EmailSequenceEnrollment[]
+  priceAlerts       PriceAlert[]
+  forecastRecords   ForecastRecord[]
+}
+
+// ============ API Keys (programmatic access) ============
+
+model ApiKey {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name String  @db.Text
+  keyPrefix   String   // 8 chars first for display
+  keyHash     String   @unique // SHA-256 hash of full key
+  scopes String      // JSON array: ["read:invoices", "write:invoices", ...]
+  lastUsedAt DateTime ? @db.Timestamptz(6)
+  expiresAt DateTime ? @db.Timestamptz(6)
+  isActive    Boolean  @default(true)
+  createdBy   String?
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+
+  @@index([tenantId])
+  @@index([keyHash])
+}
+
+// ============ System Settings (key/value) ============
+
+model SystemSettings {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+}
+
+// ============ ماژول ۱: هسته حسابداری ============
+
+model AccountGroup {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  code      String
+  name String  @db.Text
+  type      String   // BALANCE_SHEET | PROFIT_LOSS
+  nature    String   // DEBIT | CREDIT
+  order     Int      @default(0)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime ? @db.Timestamptz(6)
+
+  accounts Account[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+}
+
+model Account {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  code        String
+  name String  @db.Text
+  groupId     String
+  group       AccountGroup @relation(fields: [groupId], references: [id])
+  nature      String   // DEBIT | CREDIT
+  balanceType String   // GENERAL | DETAIL
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime ? @db.Timestamptz(6)
+
+  subAccounts   SubAccount[]
+  journalLines  JournalLine[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, groupId])
+}
+
+model SubAccount {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  code         String
+  name String  @db.Text
+  accountId    String
+  account      Account  @relation(fields: [accountId], references: [id])
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime ? @db.Timestamptz(6)
+
+  details      DetailAccount[]
+  journalLines JournalLine[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, accountId])
+}
+
+model DetailAccount {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  code          String
+  name String  @db.Text
+  subAccountId  String
+  subAccount    SubAccount @relation(fields: [subAccountId], references: [id])
+  partyType     String?  // CUSTOMER | SUPPLIER | EMPLOYEE | BANK | CASH | OTHER
+  partyId       String?
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime ? @db.Timestamptz(6)
+
+  @@unique([tenantId, code])
+  @@index([tenantId, subAccountId])
+}
+
+model JournalEntry {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  number        Int
+  date DateTime  @db.Timestamptz(6)
+  type          String   // JOURNAL | RECEIPT | PAYMENT
+  description String  @db.Text
+  status        String   @default("DRAFT") // DRAFT | POSTED | REVERSED
+  fiscalYearId  String?
+  fiscalYear    FiscalYear? @relation(fields: [fiscalYearId], references: [id])
+  attachmentUrl String?
+  // FIX(3b-بیگ۲ — همگام با schema اصلی): سندِ خودکارِ فاکتور به فاکتور وصل است —
+  // برای یافتن/ابطال سند هنگام حذف/ابطال فاکتور و جلوگیری از سند تکراری
+  sourceInvoiceId String?
+  createdBy     String?
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime ? @db.Timestamptz(6)
+
+  lines JournalLine[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, date])
+  @@index([tenantId, status])
+  // composite هماهنگ با schema اصلی
+  @@index([tenantId, date, status])
+  @@index([tenantId, fiscalYearId, status])
+  // FIX(3b — همگام): جستجوی سریع سندِ مرتبط با فاکتور
+  @@index([tenantId, sourceInvoiceId])
+}
+
+model JournalLine {
+  id              String   @id @default(cuid())
+  tenantId        String
+  journalEntryId  String
+  journalEntry    JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  accountId       String
+  account         Account  @relation(fields: [accountId], references: [id])
+  subAccountId    String?
+  subAccount      SubAccount? @relation(fields: [subAccountId], references: [id])
+  detailAccountId String?
+  // FIX(3b-بیگ۱ — همگام با schema اصلی): مبالغ به ریال (BigInt) — قبلاً Int (۳۲بیتی)
+  // بود و سند بالای ~۲.۱ میلیارد ریال کرش می‌کرد.
+  debit           BigInt   @default(0)
+  credit          BigInt   @default(0)
+  description String ? @db.Text
+  costCenterId    String?
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([journalEntryId])
+  @@index([accountId])
+}
+
+model FiscalYear {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name String  @db.Text
+  startDate DateTime  @db.Timestamptz(6)
+  endDate DateTime  @db.Timestamptz(6)
+  status    String   @default("OPEN") // OPEN | CLOSED
+  isCurrent Boolean  @default(false)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+
+  entries JournalEntry[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model CostCenter {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  code      String
+  name String  @db.Text
+  type      String   // COST | REVENUE
+  parentId  String?
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime ? @db.Timestamptz(6)
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+}
+
+// ============ ماژول ۲: انبار و کالا ============
+
+model Warehouse {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  code      String
+  name String  @db.Text
+  address String ? @db.Text
+  isActive  Boolean  @default(true)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime ? @db.Timestamptz(6)
+
+  stockItems StockItem[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+}
+
+model ProductCategory {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name String  @db.Text
+  parentId  String?
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime ? @db.Timestamptz(6)
+
+  products Product[]
+
+  @@index([tenantId])
+}
+
+model Product {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sku           String
+  barcode       String?
+  name String  @db.Text
+  categoryId    String?
+  category      ProductCategory? @relation(fields: [categoryId], references: [id])
+  unit          String
+  type          String   // GOODS | SERVICE | ASSEMBLY
+  valuation     String   @default("AVG")
+  // قیمت‌ها به ریال
+  purchasePrice BigInt       @default(0) @db.BigInt
+  salePrice BigInt       @default(0) @db.BigInt
+  wholesalePrice BigInt      @default(0) @db.BigInt
+  minStock      Float    @default(0)
+  maxStock      Float    @default(0)
+  // FIX(v4): همگام با SQLite — نرخ قانونی ۱۴۰۴+ = ۱۰٪ (قبلاً ۰.۰۹ بود)
+  taxRate       Float    @default(0.1)
+  // FIX(v4-مودیان/H4): شناسه کالا/خدمت نظام کدینگ (sstid) — الزامی برای B2B مودیان
+  goodsCode     String?
+  description String ? @db.Text
+  imageUrl      String?
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime ? @db.Timestamptz(6)
+
+  stockItems   StockItem[]
+  invoiceItems InvoiceItem[]
+  bomItems     BOMItem[]
+  productions  ProductionOrderItem[]
+
+  @@unique([tenantId, sku])
+  @@index([tenantId, categoryId])
+  @@index([tenantId, name])
+}
+
+model StockItem {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productId    String
+  product      Product  @relation(fields: [productId], references: [id])
+  warehouseId  String
+  warehouse    Warehouse @relation(fields: [warehouseId], references: [id])
+  quantity     Float    @default(0)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+
+  @@unique([tenantId, productId, warehouseId])
+  @@index([productId, warehouseId])
+}
+
+model StockMovement {
+  id             String   @id @default(cuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productId      String
+  type           String   // IN | OUT | TRANSFER
+  quantity       Float
+  fromWarehouseId String?
+  toWarehouseId   String?
+  referenceType  String?  // INVOICE | RECEIPT | ISSUE | ADJUSTMENT | PRODUCTION
+  referenceId    String?
+  date DateTime  @default(now()) @db.Timestamptz(6)
+  unitCost BigInt ? @db.BigInt
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([tenantId, productId])
+  @@index([tenantId, date])
+}
+
+// ============ ماژول ۳: خرید و فروش ============
+
+model Party {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  code          String
+  name String  @db.Text
+  type          String   // CUSTOMER | SUPPLIER | BOTH
+  nationalId    String?
+  // FIX(3b-بیگ۸ — همگام): ایندکس کور (HMAC) برای جستجوی کد ملی رمزنگاری‌شده
+  nationalIdIndex String?
+  economicCode  String?
+  taxId         String?
+  phone         String?
+  mobile        String?
+  email         String?
+  address String ? @db.Text
+  city          String?
+  province      String?
+  postalCode    String?
+  creditLimit BigInt     @default(0) @db.BigInt
+  openingBalance BigInt     @default(0) @db.BigInt
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime ? @db.Timestamptz(6)
+
+  invoices   Invoice[]
+  checks     Check[]
+  contacts   Contact[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, name])
+  @@index([tenantId, mobile])
+  // FIX(3b-بیگ۸ — همگام): جستجوی کور کد ملی
+  @@index([tenantId, nationalIdIndex])
+}
+
+model Invoice {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  number       String
+  type         String   // SALE | PURCHASE | PRE_INVOICE | RETURN
+  partyId      String
+  party        Party    @relation(fields: [partyId], references: [id])
+  date DateTime  @db.Timestamptz(6)
+  dueDate DateTime ? @db.Timestamptz(6)
+  warehouseId  String?
+  // مبالغ به ریال
+  subtotal BigInt       @default(0) @db.BigInt
+  discount BigInt       @default(0) @db.BigInt
+  tax BigInt       @default(0) @db.BigInt
+  otherCosts BigInt       @default(0) @db.BigInt
+  total BigInt       @default(0) @db.BigInt
+  paidAmount BigInt       @default(0) @db.BigInt
+  // چندارزی — ارز فاکتور (IRR پیش‌فرض) و نرخ تبدیل به ریال هنگام ثبت
+  currency     String   @default("IRR") // IRR | USD | EUR | AED | GBP | TRY | CNY | SAR
+  exchangeRate Float?   @default(1) // نرخ تبدیل ارز به IRR هنگام ثبت (چون مبالغ داخلی به ریال ذخیره می‌شوند)
+  status       String   @default("DRAFT")
+  modianStatus String?
+  modianUid    String?
+  modianRefId  String?
+  description String ? @db.Text
+  createdBy    String?
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime ? @db.Timestamptz(6)
+
+  items InvoiceItem[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, date])
+  @@index([tenantId, status])
+  @@index([tenantId, partyId])
+  // composite برای کوئری‌های گزارش فاکتور بر اساس تاریخ و وضعیت (هماهنگ با schema اصلی)
+  @@index([tenantId, date, status])
+  @@index([tenantId, type, status])
+  @@index([modianUid])
+  @@index([modianStatus])
+}
+
+model InvoiceItem {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  productId   String?
+  product     Product? @relation(fields: [productId], references: [id])
+  description String  @db.Text
+  quantity    Float   @default(1)
+  unitPrice BigInt      @default(0) @db.BigInt
+  discount    Float   @default(0)
+  taxRate     Float   @default(0.1)
+  taxAmount BigInt      @default(0) @db.BigInt
+  total BigInt      @default(0) @db.BigInt
+
+  @@index([invoiceId])
+  @@index([productId])
+}
+
+// ============ ماژول ۴: مالی و خزانه‌داری ============
+
+model BankAccount {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  bankName      String
+  branch        String?
+  accountNumber String
+  cardNumber    String?
+  shaba         String?
+  type          String   // CURRENT | SAVING | LOAN
+  balance BigInt     @default(0) @db.BigInt
+  currency      String   @default("IRR")
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime ? @db.Timestamptz(6)
+
+  @@unique([tenantId, accountNumber])
+  @@index([tenantId])
+}
+
+model Check {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  number        String
+  type          String   // RECEIVED | ISSUED
+  sayadId       String?
+  status        String   @default("REGISTERED")
+  amount BigInt  @db.BigInt
+  issueDate DateTime  @db.Timestamptz(6)
+  dueDate DateTime  @db.Timestamptz(6)
+  bankName      String
+  branch        String?
+  partyId       String?
+  party         Party?   @relation(fields: [partyId], references: [id])
+  bankAccountId String?
+  description String ? @db.Text
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime ? @db.Timestamptz(6)
+
+  @@unique([tenantId, number])
+  @@index([tenantId, dueDate])
+  @@index([tenantId, status])
+}
+
+model PettyCash {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name String  @db.Text
+  custodian   String?
+  balance     Int      @default(0)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime ? @db.Timestamptz(6)
+
+  @@index([tenantId])
+}
+
+model Loan {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  title String  @db.Text
+  principal BigInt  @db.BigInt
+  interestRate Float   @default(0)
+  installments Int     @default(1)
+  startDate DateTime  @db.Timestamptz(6)
+  partyId      String?
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime ? @db.Timestamptz(6)
+
+  @@index([tenantId])
+}
+
+// ============ ماژول ۵: حقوق و دستمزد ============
+
+model Employee {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  personnelCode String
+  firstName     String
+  lastName      String
+  nationalId    String
+  contractType  String   // PERMANENT | PROBATION | TEMPORARY
+  baseSalary BigInt       @default(0) @db.BigInt
+  insuranceCode String?
+  taxCode       String?
+  hireDate DateTime  @db.Timestamptz(6)
+  status        String   @default("ACTIVE")
+  department    String?
+  position      String?
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime ? @db.Timestamptz(6)
+
+  payrolls Payroll[]
+
+  @@unique([tenantId, personnelCode])
+  @@index([tenantId, status])
+}
+
+model Payroll {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employeeId  String
+  employee    Employee @relation(fields: [employeeId], references: [id])
+  month       Int
+  year        Int
+  baseSalary BigInt  @db.BigInt
+  overtime BigInt       @default(0) @db.BigInt
+  bonus BigInt       @default(0) @db.BigInt
+  insurance BigInt       @default(0) @db.BigInt
+  tax BigInt       @default(0) @db.BigInt
+  total BigInt       @default(0) @db.BigInt
+  status      String   @default("DRAFT")
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+
+  @@unique([tenantId, employeeId, month, year])
+  @@index([tenantId, year, month])
+}
+
+// ============ ماژول ۱۱: CRM + باشگاه مشتریان ============
+
+model Contact {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name String  @db.Text
+  type      String   // LEAD | CUSTOMER | SUPPLIER
+  phone     String?
+  email     String?
+  company   String?
+  status    String   @default("NEW")
+  value BigInt     @default(0) @db.BigInt
+  notes     String?
+  partyId   String?
+  party     Party?   @relation(fields: [partyId], references: [id])
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime ? @db.Timestamptz(6)
+
+  followUps FollowUp[]
+
+  @@index([tenantId, status])
+}
+
+model FollowUp {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contactId String
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  type      String   // CALL | EMAIL | MEETING | TASK
+  subject String  @db.Text
+  dueDate DateTime  @db.Timestamptz(6)
+  status    String   @default("PENDING")
+  notes     String?
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([tenantId, dueDate])
+}
+
+model LoyaltyMember {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  partyId   String?  @unique
+  name String  @db.Text
+  phone     String?
+  tier      String   @default("BRONZE") // BRONZE | SILVER | GOLD | PLATINUM
+  points    Int      @default(0)
+  totalSpent BigInt      @default(0) @db.BigInt
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+
+  @@index([tenantId, tier])
+}
+
+// ============ ماژول ۱۲: تولیدی ============
+
+model BOM {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name String  @db.Text
+  productId   String?  // محصول نهایی
+  version     Int      @default(1)
+  status      String   @default("ACTIVE")
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime ? @db.Timestamptz(6)
+
+  items BOMItem[]
+  orders ProductionOrder[]
+
+  @@index([tenantId])
+}
+
+model BOMItem {
+  id        String @id @default(cuid())
+  bomId     String
+  bom       BOM    @relation(fields: [bomId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Float
+  unit      String
+
+  @@index([bomId])
+}
+
+model ProductionOrder {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  number      String
+  bomId       String
+  bom         BOM      @relation(fields: [bomId], references: [id])
+  quantity    Float
+  status      String   @default("PLANNED") // PLANNED | IN_PROGRESS | COMPLETED | CANCELLED
+  startDate DateTime  @db.Timestamptz(6)
+  endDate DateTime ? @db.Timestamptz(6)
+  costPerUnit BigInt       @default(0) @db.BigInt
+  totalCost BigInt       @default(0) @db.BigInt
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+
+  items ProductionOrderItem[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status])
+}
+
+model ProductionOrderItem {
+  id               String @id @default(cuid())
+  productionOrderId String
+  productionOrder  ProductionOrder @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
+  productId        String
+  product          Product @relation(fields: [productId], references: [id])
+  quantityRequired Float
+  quantityConsumed Float  @default(0)
+
+  @@index([productionOrderId])
+}
+
+// ============ ماژول ۱۳: پیمانکاری ============
+
+model Project {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  code        String
+  name String  @db.Text
+  clientId    String?
+  startDate DateTime  @db.Timestamptz(6)
+  endDate DateTime ? @db.Timestamptz(6)
+  contractValue BigInt     @default(0) @db.BigInt
+  status      String   @default("ACTIVE") // ACTIVE | COMPLETED | SUSPENDED
+  progress    Float    @default(0)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime ? @db.Timestamptz(6)
+
+  @@unique([tenantId, code])
+  @@index([tenantId, status])
+}
+
+// ============ یادآورهای هوشمند ============
+
+model Reminder {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  type      String   // CHECK_DUE | LOW_STOCK | BIRTHDAY | INVOICE_OVERDUE | CUSTOM
+  title String  @db.Text
+  message String  @db.Text
+  dueDate DateTime  @db.Timestamptz(6)
+  priority  String   @default("MEDIUM") // LOW | MEDIUM | HIGH
+  status    String   @default("PENDING") // PENDING | SENT | DISMISSED
+  entityId  String?
+  entityType String?
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([tenantId, dueDate])
+  @@index([tenantId, status])
+}
+
+// ============ ماژول ۱۴: امنیت و کاربران ============
+
+model User {
+  id              String   @id @default(cuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email           String   @unique
+  username        String?  @unique // نام کاربری قابل تغییر
+  name String  @db.Text
+  family          String?  // نام خانوادگی
+  password        String   // bcrypt hashed
+  phone           String?
+  role            String   @default("USER") // ADMIN | ACCOUNTANT | MANAGER | USER
+  isActive        Boolean  @default(true)
+  isDemo          Boolean  @default(false) // کاربر دمو
+  isTrial         Boolean  @default(false) // کاربر تریال ۱۴ روزه
+  trialEndsAt DateTime ? @db.Timestamptz(6)   // تاریخ پایان تریال
+  logoUrl         String?  // لوگوی شرکت
+  company         String?  // نام شرکت
+  nationalId      String?  // شناسه ملی شرکت
+  address String ? @db.Text    // آدرس
+  twoFactorEnabled    Boolean @default(false)
+  twoFactorSecret     String?
+  twoFactorBackupCodes String ?   // AES-256-GCM encrypted JSON array of backup codes
+  lastLogin DateTime ? @db.Timestamptz(6)
+  lastLoginIp     String?
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime ? @db.Timestamptz(6)
+
+  auditLogs      AuditLog[]
+  aiMessages     AIMessage[]
+  sessions       UserSession[]
+  tenantMembers  TenantMember[]
+
+  @@index([tenantId])
+  @@index([isTrial])
+  @@index([isDemo])
+}
+
+// ============ عضویت چندشرکتی (Multi-Tenant Membership) ============
+// یک کاربر می‌تواند به چندین شرکت (Tenant) دسترسی داشته باشد.
+// این مدل اتصال user↔tenant را نگه می‌دارد تا سوییچ بین شرکت‌ها ممکن شود.
+model TenantMember {
+  id        String   @id @default(cuid())
+  userId    String
+  tenantId  String
+  role      String   @default("ADMIN") // ADMIN | ACCOUNTANT | MANAGER | USER
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tenantId])
+  @@index([userId])
+  @@index([tenantId])
+}
+
+// ============ نشست‌های کاربر (برای مدیریت دستگاه‌ها) ============
+model UserSession {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token           String   @unique // JWT token
+  deviceFingerprint String // اثر انگشت دستگاه
+  deviceName      String?  // نام دستگاه (User-Agent)
+  ipAddress       String?
+  expiresAt DateTime  @db.Timestamptz(6)
+  isActive        Boolean  @default(true)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  lastUsedAt DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([userId])
+  @@index([token])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String   // CREATE | UPDATE | DELETE | LOGIN | LOGOUT | VIEW | EXPORT | PRINT
+  entity    String
+  entityId  String?
+  changes String ?    // JSON
+  ipAddress String?
+  userAgent String ? @db.Text
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([tenantId, createdAt])
+  @@index([userId])
+}
+
+// ============ هوش مصنوعی ============
+
+model AIConversation {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String?
+  title String  @db.Text
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+
+  messages AIMessage[]
+
+  @@index([tenantId])
+}
+
+model AIMessage {
+  id            String   @id @default(cuid())
+  conversationId String
+  conversation  AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId        String?
+  user          User?    @relation(fields: [userId], references: [id])
+  role          String   // USER | ASSISTANT | SYSTEM
+  content String  @db.Text
+  tokensUsed    Int      @default(0)
+  toolUsed      String?  // نام ابزار استفاده‌شده (RAG)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([conversationId])
+  @@index([userId])
+}
+
+// ============ اعلان‌ها ============
+
+model Notification {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String?
+  title String  @db.Text
+  message String  @db.Text
+  type      String   // INFO | WARNING | ERROR | SUCCESS
+  isRead    Boolean  @default(false)
+  link      String?
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([tenantId, isRead])
+  // کوئری‌های رایج: «اعلان‌های من» و «شمارش خوانده‌نشده‌ی من» (هماهنگ با schema اصلی)
+  @@index([userId, isRead])
+  @@index([createdAt])
+}
+
+// ============ اتصالات (Integrations) ============
+
+model Integration {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  type        String   // WOOCOMMERCE | DIGIKALA | BASALAM | MODIAN | PAYMENT | BANK
+  name String  @db.Text
+  status      String   @default("PENDING") // PENDING | CONNECTED | ERROR | DISCONNECTED
+  config String      // JSON
+  lastSync DateTime ? @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+
+  webhooks Webhook[]
+
+  @@index([tenantId, type])
+}
+
+model Webhook {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  integrationId String?
+  integration   Integration? @relation(fields: [integrationId], references: [id])
+  event       String   // invoice.created | invoice.paid | stock.low | check.due | order.placed
+  url         String
+  secret      String?
+  isActive    Boolean  @default(true)
+  lastFired DateTime ? @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([tenantId, event])
+}
+
+// ============ پشتیبانی ============
+
+model SupportTicket {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subject String  @db.Text
+  description String  @db.Text
+  category    String   // BILLING | TECHNICAL | FEATURE_REQUEST | BUG | OTHER
+  priority    String   @default("MEDIUM") // LOW | MEDIUM | HIGH | URGENT
+  status      String   @default("OPEN") // OPEN | IN_PROGRESS | RESOLVED | CLOSED
+  userId      String?
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+
+  @@index([tenantId, status])
+}
+
+// ============ سوپرادمین پلتفرم (مخفی) ============
+
+model SuperAdmin {
+  id            String   @id @default(cuid())
+  username      String   @unique
+  password      String   // bcrypt hashed
+  role          String   @default("SUPER_ADMIN")
+  isActive      Boolean  @default(true)
+  lastLogin DateTime ? @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+
+  licenses      License[]
+  auditLogs     PlatformAuditLog[]
+}
+
+// ============ لایسنس ============
+
+model License {
+  id                String   @id @default(cuid())
+  key               String   @unique // کلید لایسنس (نمایشی)
+  keyHash           String   @unique // هش کلید برای ذخیره امن
+  tenantId          String?  // tenant متصل (null = استفاده نشده)
+  tenant            Tenant?  @relation(fields: [tenantId], references: [id])
+  plan              String   // starter | business | enterprise | accountant
+  maxUsers          Int      @default(1)
+  maxInvoices       Int      @default(100) // فاکتور در ماه
+  maxWarehouses     Int      @default(1)
+  features String      // JSON: لیست ماژول‌های فعال
+  status            String   @default("ACTIVE") // ACTIVE | SUSPENDED | EXPIRED | REVOKED
+  issuedBy          String?  // super admin id
+  superAdmin        SuperAdmin? @relation(fields: [issuedBy], references: [id])
+  startDate DateTime  @default(now()) @db.Timestamptz(6)
+  endDate DateTime ? @db.Timestamptz(6)   // null = دائمی
+  activationIp      String?
+  activationDevice  String?  // device fingerprint اولین فعال‌سازی
+  activatedAt DateTime ? @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  // ضد هک: تعداد تلاش‌های ناموفز
+  failedAttempts    Int      @default(0)
+  lastFailedAt DateTime ? @db.Timestamptz(6)
+  blockedDevices    String?  // JSON array of blocked device fingerprints
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([keyHash])
+}
+
+// ============ لاگ تغییرات پلتفرم ============
+
+model PlatformAuditLog {
+  id            String   @id @default(cuid())
+  superAdminId  String?
+  superAdmin    SuperAdmin? @relation(fields: [superAdminId], references: [id])
+  action        String   // LOGIN | CREATE_LICENSE | REVOKE_LICENSE | QUICK_LOGIN | SUSPEND_TENANT | ...
+  entity        String
+  entityId      String?
+  details       String?  // JSON
+  ipAddress     String?
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([superAdminId])
+  @@index([createdAt])
+}
+
+// ============ IP مسدود‌شده (ضد هک) ============
+
+model BlockedIp {
+  id          String   @id @default(cuid())
+  ipAddress   String   @unique
+  reason String  @db.Text     // RATE_LIMIT_EXCEEDED | BRUTE_FORCE | SUSPICIOUS_ACTIVITY | MANUAL
+  attempts    Int      @default(0)
+  blockedBy   String?  // super admin id یا سیستم
+  blockedAt DateTime  @default(now()) @db.Timestamptz(6)
+  expiresAt DateTime ? @db.Timestamptz(6)   // null = دائمی
+  isActive    Boolean  @default(true)
+
+  @@index([ipAddress])
+  @@index([isActive])
+}
+
+// ============ لاگ خطاهای سیستم ============
+
+model ErrorLog {
+  id          String   @id @default(cuid())
+  level       String   // ERROR | WARN | INFO
+  message String  @db.Text
+  stack String ? @db.Text
+  url         String?
+  method      String?
+  statusCode  Int?
+  userId      String?
+  tenantId    String?
+  ipAddress   String?
+  userAgent String ? @db.Text
+  metadata String ?    // JSON
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([level])
+  @@index([createdAt])
+  @@index([tenantId])
+}
+
+// ============ IP Whitelist برای سوپرادمین ============
+
+model IpWhitelist {
+  id          String   @id @default(cuid())
+  ipAddress   String   @unique
+  label       String?  // توضیح (مثلاً "دفتر مرکزی")
+  addedBy     String?  // super admin id
+  isActive    Boolean  @default(true)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([ipAddress])
+}
+
+// ============ بلاگ / CMS / سئو ============
+
+model BlogPost {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  title String  @db.Text
+  excerpt String ? @db.Text
+  content String  @db.Text     // HTML or Markdown
+  coverImage    String?
+  category      String   // ACCOUNTING | TAX | PAYROLL | TUTORIAL | NEWS | MODIAN
+  tags          String?  // JSON array
+  status        String   @default("DRAFT") // DRAFT | PUBLISHED | ARCHIVED
+  publishedAt DateTime ? @db.Timestamptz(6)
+  readingTime   Int      @default(5) // دقیقه
+  
+  // سئو
+  metaTitle       String?
+  metaDescription String?
+  focusKeyword String ? @db.Text
+  ogImage         String?
+  
+  authorId     String?
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  
+  @@index([status, publishedAt])
+  @@index([category])
+  @@index([slug])
+}
+
+model EcosystemConnection {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  service     String   // NOBATIME | CATALOG | HESABYAR
+  connectedAt DateTime ? @db.Timestamptz(6)
+  status      String   @default("PENDING") // PENDING | CONNECTED | ERROR
+  ssoToken String ?    // توکن SSO
+  externalId  String?  // شناسه در سرویس مقصد
+  config String ?    // JSON
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  
+  @@unique([tenantId, service])
+  @@index([tenantId])
+}
+
+model SeoMeta {
+  id              String   @id @default(cuid())
+  page            String   @unique // /, /pricing, /blog, etc.
+  title String ? @db.Text
+  description String ? @db.Text
+  keywords        String?  // comma separated
+  ogTitle         String?
+  ogDescription   String?
+  ogImage         String?
+  canonical       String?
+  robots          String   @default("index, follow")
+  structuredData String ?    // JSON-LD
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+}
+
+// ============ PROD-V4: Multi-Currency & Exchange Rates ============
+
+model Currency {
+  id        String   @id @default(cuid())
+  code      String   @unique // USD, EUR, AED, etc.
+  name String  @db.Text     // دلار آمریکا
+  symbol    String   // $
+  isActive  Boolean  @default(true)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+}
+
+model ExchangeRate {
+  id          String   @id @default(cuid())
+  fromCurrency String  // USD
+  toCurrency   String  // IRR
+  rate        Float    // 65000
+  source      String   @default("manual") // manual | API
+  fetchedAt DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@unique([fromCurrency, toCurrency])
+  @@index([fromCurrency, toCurrency])
+}
+
+// ============ PROD-V4: Budget Planning ============
+
+model Budget {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  title String  @db.Text     // بودجه ۱۴۰۳
+  fiscalYear  String   // 1403
+  period      String   // monthly | quarterly | yearly
+  totalAmount BigInt    @default(0) @db.BigInt
+  categories String      // JSON: [{ category, amount }]
+  status      String   @default("ACTIVE") // ACTIVE | CLOSED
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+
+  items BudgetItem[]
+
+  @@index([tenantId])
+}
+
+model BudgetItem {
+  id           String  @id @default(cuid())
+  budgetId     String
+  budget       Budget  @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  category     String  // فروش، خرید، حقوق، اجاره، بازاریابی
+  period       String  // Q1, Q2, Q3, Q4 or month 1-12
+  budgetAmount BigInt   @default(0) @db.BigInt
+  actualAmount BigInt   @default(0) @db.BigInt
+  variance BigInt   @default(0) @db.BigInt
+
+  @@index([budgetId])
+}
+
+// ============ PROD-V4: Email/SMS Templates ============
+
+model EmailTemplate {
+  id        String   @id @default(cuid())
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
+  name String  @db.Text     // فاکتور جدید
+  type      String   // INVOICE_CREATED | PAYMENT_RECEIVED | CHECK_DUE | WELCOME | TRIAL_ENDING
+  subject String  @db.Text
+  body String  @db.Text     // HTML with {{variables}}
+  variables String      // JSON: ["customerName", "invoiceNumber", "amount"]
+  isActive  Boolean  @default(true)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+
+  @@index([tenantId, type])
+}
+
+// ============ PROD-V4: Workflow Automation ============
+
+model Workflow {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name String  @db.Text     // هشدار سررسید چک
+  trigger     String   // INVOICE_OVERDUE | CHECK_DUE | LOW_STOCK | PAYMENT_RECEIVED | DAILY
+  conditions String      // JSON: [{ field, operator, value }]
+  actions String      // JSON: [{ type: "email"|"sms"|"notification", template, recipient }]
+  isActive    Boolean  @default(true)
+  lastFired DateTime ? @db.Timestamptz(6)
+  firedCount  Int      @default(0)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+
+  @@index([tenantId])
+}
+
+// ============ PROD-V5: Advanced Search Saved Searches ============
+
+model SavedSearch {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String
+  name String  @db.Text
+  query     String
+  entity    String   // invoices | products | parties | journal | all
+  filters   String   // JSON
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([tenantId, userId])
+}
+
+// ============ PROD-V5: Tags System ============
+
+model Tag {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name String  @db.Text
+  color     String   @default("primary") // primary | success | warning | destructive | info
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+
+  entityTags EntityTag[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model EntityTag {
+  id         String @id @default(cuid())
+  tagId      String
+  tag        Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  entityType String // INVOICE | PRODUCT | PARTY | JOURNAL
+  entityId   String
+
+  @@unique([tagId, entityType, entityId])
+  @@index([entityType, entityId])
+}
+
+// ============ PROD-V5: Document Versioning ============
+
+model DocumentVersion {
+  id                String   @id @default(cuid())
+  tenantId          String
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  entityType        String   // INVOICE | JOURNAL_ENTRY
+  entityId          String
+  version           Int      // 1, 2, 3...
+  snapshot String  @db.Text     // JSON: full document state
+  changedBy         String?  // userId
+  changedAt DateTime  @default(now()) @db.Timestamptz(6)
+  changeDescription String ? @db.Text
+
+  @@index([entityType, entityId])
+  @@index([tenantId])
+}
+
+// ============ PROD-V5: Document Templates ============
+
+model DocumentTemplate {
+  id          String   @id @default(cuid())
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
+  name String  @db.Text     // قالب فاکتور فروش
+  type        String   // INVOICE_SALE | INVOICE_PURCHASE | RECEIPT | QUOTE | CUSTOM
+  content String  @db.Text     // HTML template with {{variables}}
+  header String ? @db.Text    // optional header HTML
+  footer String ? @db.Text    // optional footer HTML
+  paperSize   String   @default("A4") // A4 | Letter
+  orientation String   @default("portrait") // portrait | landscape
+  isActive    Boolean  @default(true)
+  isDefault   Boolean  @default(false)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+
+  @@index([tenantId, type])
+}
+
+// ============ INFRA-SEC-ANALYTICS: Feature Flags ============
+// پرچم‌های ویژگی (Feature Flags) برای فعال/غیرفعال‌سازی تدریجی قابلیت‌ها
+// rolloutPercentage — درصد کاربرانی که فلگ برایشان فعال است (۰ تا ۱۰۰)
+// conditions — JSON: قوانین اضافی (مثلاً فقط پلن business یا فقط کاربران خاص)
+// updatedAt + updatedBy برای audit
+
+model FeatureFlag {
+  id                String   @id @default(cuid())
+  name String    @unique @db.Text   // نام منطقی فلگ: ai-assistant, modian-v2, ...
+  description String ? @db.Text
+  enabled           Boolean  @default(false)
+  rolloutPercentage Int      @default(0) // 0..100
+  conditions String ?    // JSON: { plan?: string[], roles?: string[], tenantIds?: string[] }
+  updatedBy         String?  // سوپرادمین یا کاربری که آخرین تغییر را داده
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+
+  @@index([enabled])
+}
+
+// ============ INFRA-SEC-ANALYTICS: Churn Prediction Signals ============
+// سیگنال‌های رفتاری کاربر که برای پیش‌بینی ریزش (Churn) استفاده می‌شوند
+// هر رکورد = یک سیگنال برای یک کاربر در یک روز
+
+model ChurnSignal {
+  id              String   @id @default(cuid())
+  userId          String
+  tenantId        String
+  signalDate DateTime  @db.Timestamptz(6)   // تاریخ سیگنال (روزانه)
+  lastLoginDays   Int      @default(0) // روزهای گذشته از آخرین ورود
+  sessionCount    Int      @default(0) // تعداد نشست امروز
+  featureCount    Int      @default(0) // تعداد ماژول‌های متفاوت استفاده‌شده امروز
+  errorCount      Int      @default(0) // تعداد خطاهای رخ‌داده برای این کاربر امروز
+  invoiceCount    Int      @default(0) // تعداد فاکتورهای صادرشده امروز
+  riskScore       Float    @default(0) // امتیاز ریسک ۰ تا ۱ (محاسبه‌شده)
+  factors String ?    // JSON: فاکتورهای مشارکت‌کننده
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([userId, signalDate])
+  @@index([tenantId])
+  @@index([riskScore])
+}
+
+// ============ UX-ECO-V2: Ecosystem Webhook Subscriptions ============
+// اشتراک‌های webhook برای ارسال رویدادهای هوش‌حساب به سرویس‌های اکوسیستم
+// (Nobatime، Catalog، HesabYar). هر سرویس می‌تواند برای چند رویداد ثبت شود.
+
+model EcosystemWebhook {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  service     String   // NOBATIME | CATALOG | HESABYAR
+  event       String   // invoice_created | payment_received | product_updated | party_created
+  url         String
+  secret      String?
+  isActive    Boolean  @default(true)
+  lastFired DateTime ? @db.Timestamptz(6)
+  lastStatus  String?  // success | failed | pending
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+
+  @@unique([tenantId, service, event, url])
+  @@index([tenantId, service])
+  @@index([event])
+}
+
+// ============ UX-ECO-V2: Push Subscriptions (Marketing) ============
+// اشتراک‌های Push Notification کاربران برای ارسال نوتیفیکیشن وب
+// (Web Push API با VAPID). هر کاربر می‌تواند چند دستگاه داشته باشد.
+
+model PushSubscription {
+  id          String   @id @default(cuid())
+  userId      String
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  endpoint    String
+  p256dhKey   String
+  authKey     String
+  userAgent String ? @db.Text
+  isActive    Boolean  @default(true)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+
+  @@unique([userId, endpoint])
+  @@index([userId])
+  @@index([tenantId])
+}
+
+// ============ PROD-V8: Email Queue with Retry & Tracking ============
+// صف ارسال ایمیل با retry، attempts tracking و timed scheduling
+// status: PENDING | SENT | FAILED | RETRYING
+// processEmailQueue تا ۵۰ ایمیل PENDING یا RETRYING را ارسال می‌کند
+
+model EmailQueue {
+  id          String    @id @default(cuid())
+  tenantId    String?
+  to          String
+  subject String  @db.Text
+  html        String
+  status      String    @default("PENDING") // PENDING | SENT | FAILED | RETRYING
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(3)
+  lastError   String?
+  sentAt DateTime ? @db.Timestamptz(6)
+  scheduledAt DateTime   @default(now()) @db.Timestamptz(6)
+  createdAt DateTime   @default(now()) @db.Timestamptz(6)
+
+  @@index([status, scheduledAt])
+  @@index([tenantId])
+}
+
+// ============ PROD-V8: SMS Templates ============
+// قالب‌های پیامک با {{variables}} و پشتیبانی از segment count
+
+model SmsTemplate {
+  id        String   @id @default(cuid())
+  tenantId  String?
+  name String  @db.Text
+  type      String   // VERIFICATION | REMINDER | DISCOUNT | WELCOME | CHECK_DUE | INVOICE_PAID
+  body String  @db.Text     // با {{variables}}
+  variables String      // JSON: ["customerName", "amount", ...]
+  isActive  Boolean  @default(true)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+
+  @@index([tenantId, type])
+}
+
+// ============ PROD-V8: Document Collaboration ============
+// قفل سند برای جلوگیری از ویرایش همزمان (5 دقیقه expiry)
+// تاریخچه ویرایش‌ها برای audit trail
+
+model DocumentLock {
+  id          String   @id @default(cuid())
+  tenantId    String
+  entityType  String
+  entityId    String
+  userId      String
+  lockedAt DateTime  @default(now()) @db.Timestamptz(6)
+  expiresAt DateTime  @db.Timestamptz(6)
+
+  @@unique([entityType, entityId])
+  @@index([tenantId])
+}
+
+model DocumentEdit {
+  id          String   @id @default(cuid())
+  tenantId    String
+  entityType  String
+  entityId    String
+  userId      String
+  field       String
+  oldValue    String?
+  newValue    String?
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([entityType, entityId])
+  @@index([tenantId])
+}
+
+// ============ INFRA-ECO-MKT-SEC: Email Sequences (Drip Campaigns) ============
+// دنباله‌های ایمیل بازاریابی — مجموعه‌ای از ایمیل‌ها با تأخیر مشخص
+// که پس از یک trigger (SIGNUP, TRIAL_START, ...) برای کاربر ارسال می‌شوند.
+// steps: JSON array of { delay (hours), templateId, subject?, body? }
+
+model EmailSequence {
+  id        String   @id @default(cuid())
+  name String  @db.Text
+  trigger   String   // SIGNUP | TRIAL_START | TRIAL_ENDING | INACTIVE_7D | MANUAL
+  steps String      // JSON: [{ delayHours, subject, body }]
+  isActive  Boolean  @default(true)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+
+  enrollments EmailSequenceEnrollment[]
+
+  @@index([trigger, isActive])
+}
+
+// ثبت‌نام یک کاربر در یک دنباله — برای پیگیری وضعیت ارسال ایمیل‌ها
+model EmailSequenceEnrollment {
+  id         String   @id @default(cuid())
+  sequenceId String
+  sequence   EmailSequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId     String
+  userEmail  String
+  status     String   @default("ACTIVE") // ACTIVE | COMPLETED | CANCELLED
+  currentStep Int     @default(0)
+  nextSendAt DateTime ? @db.Timestamptz(6)
+  startedAt DateTime  @default(now()) @db.Timestamptz(6)
+  completedAt DateTime ? @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+
+  @@index([sequenceId])
+  @@index([userId])
+  @@index([status, nextSendAt])
+  @@index([tenantId])
+}
+
+// ============ INFRA-ECO-MKT-SEC: Referral Program ============
+// برنامه معرفی دوستان — هر کاربر کد معرفی دارد و با دعوت دوستان پاداش می‌گیرد.
+// referrerId = userId کاربر دعوت‌کننده
+// status: PENDING (دعوت ارسال شد) | SIGNED_UP (کاربر ثبت‌نام کرد) | REWARDED (پاداش داده شد)
+
+model Referral {
+  id           String   @id @default(cuid())
+  referrerId   String
+  refereeEmail String
+  code         String   @unique
+  status       String   @default("PENDING") // PENDING | SIGNED_UP | REWARDED
+  reward       Float    @default(0)
+  refereeUserId String? // پس از ثبت‌نام کاربر دعوت‌شده
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+
+  @@index([referrerId])
+  @@index([refereeEmail])
+  @@index([status])
+}
+
+// ============ PROD-V7: Price Alerts ============
+// هشدارهای قیمتی برای طلا/ارز — وقتی قیمت از آستانه‌ی درصدی عبور کند، اعلان تولید می‌شود.
+
+model PriceAlert {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  item        String   // gold:GERAM18 | currency:USD | gold:SEKEE | ...
+  threshold   Float    // درصد تغییر قابل‌قبول
+  direction   String   // up | down | both
+  isActive    Boolean  @default(true)
+  lastChecked DateTime ? @db.Timestamptz(6)
+  lastPrice   Float?
+  triggeredAt DateTime ? @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+
+  @@index([tenantId, isActive])
+}
+
+// ============ PROD-V7: Forecast Accuracy Tracking ============
+// ثبت پیش‌بینی‌های قبلی و مقادیر واقعی آن‌ها برای محاسبه‌ی دقت (MAPE) و جهت‌سنجی.
+
+model ForecastRecord {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  metric        String   // revenue | expenses | cash | profit
+  forecastDate DateTime  @db.Timestamptz(6)
+  targetDate DateTime  @db.Timestamptz(6)
+  forecastValue Float
+  actualValue   Float?
+  accuracy      Float?   // درصد خطا (absolute percentage error)
+  method        String
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([tenantId, metric])
+  @@index([targetDate])
+}
+

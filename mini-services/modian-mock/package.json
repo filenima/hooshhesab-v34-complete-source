@@ -1,0 +1,11 @@
+{
+  "name": "modian-mock",
+  "version": "1.0.0",
+  "description": "Mock Moadian (tax.gov.ir) sandbox API for Hoosh TEST environment — محیط آزمایشی شبیه‌سازی‌شده سامانه مودیان",
+  "scripts": {
+    "dev": "bun --hot index.ts"
+  },
+  "dependencies": {
+    "bun-types": "latest"
+  }
+}

@@ -1,0 +1,192 @@
+// Prisma schema - هوش‌حساب Data Warehouse (Star Schema)
+// این اسکما به‌صورت جداگانه برای تحلیل‌های OLAP طراحی شده است.
+// Fact tables + Dimension tables (star schema).
+// Note: این اسکما مرجع است. جداول واقعی در schema.prisma اصلی تعریف شده‌اند
+// تا با Prisma Client واحد کار کنیم.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============ Dimension Tables ============
+
+model DimTenant {
+  id          String   @id @default(cuid())
+  tenantKey   String   @unique
+  tenantId    String
+  name        String
+  plan        String
+  status      String
+  createdAt   DateTime
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+model DimParty {
+  id          String   @id @default(cuid())
+  partyKey    String   @unique
+  tenantId    String
+  partyId     String
+  name        String
+  type        String
+  city        String?
+  createdAt   DateTime
+
+  @@index([tenantId, partyId])
+}
+
+model DimProduct {
+  id           String   @id @default(cuid())
+  productKey   String   @unique
+  tenantId     String
+  productId    String
+  name         String
+  sku          String?
+  category     String?
+  unit         String?
+  createdAt    DateTime
+
+  @@index([tenantId, productId])
+}
+
+model DimUser {
+  id          String   @id @default(cuid())
+  userKey     String   @unique
+  userId      String
+  tenantId    String
+  name        String
+  email       String
+  role        String
+  createdAt   DateTime
+
+  @@index([userId])
+}
+
+model DimDate {
+  id          String   @id @default(cuid())
+  dateKey     String   @unique // YYYYMMDD
+  date        DateTime
+  jalaliYear  Int
+  jalaliMonth Int
+  jalaliDay   Int
+  quarter     Int
+  weekday     Int
+  isWeekend   Boolean
+
+  @@index([date])
+}
+
+// ============ Fact Tables ============
+
+model FactInvoice {
+  id           String   @id @default(cuid())
+  tenantKey    String
+  partyKey     String
+  userKey      String?
+  dateKey      String
+  invoiceId    String
+  invoiceNumber String
+  type         String   // SALE | PURCHASE | RETURN
+  status       String
+  subtotal     BigInt   @default(0)
+  discount     BigInt   @default(0)
+  tax          BigInt   @default(0)
+  total        BigInt   @default(0)
+  paidAmount   BigInt   @default(0)
+  itemCount    Int      @default(0)
+  currency     String   @default("IRR")
+  etlBatchId   String?
+  loadedAt     DateTime @default(now())
+
+  @@index([tenantKey, dateKey])
+  @@index([partyKey])
+  @@index([status])
+}
+
+model FactPayment {
+  id           String   @id @default(cuid())
+  tenantKey    String
+  partyKey     String
+  dateKey      String
+  invoiceId    String?
+  amount       BigInt   @default(0)
+  method       String
+  reference    String?
+  status       String
+  etlBatchId   String?
+  loadedAt     DateTime @default(now())
+
+  @@index([tenantKey, dateKey])
+  @@index([partyKey])
+}
+
+model FactTransaction {
+  id           String   @id @default(cuid())
+  tenantKey    String
+  partyKey     String?
+  userKey      String?
+  dateKey      String
+  journalId    String
+  entryNumber  String?
+  accountCode  String
+  debit        BigInt   @default(0)
+  credit       BigInt   @default(0)
+  etlBatchId   String?
+  loadedAt     DateTime @default(now())
+
+  @@index([tenantKey, dateKey])
+  @@index([accountCode])
+}
+
+// ============ ETL Batch Tracking ============
+
+model ETLBatch {
+  id           String   @id @default(cuid())
+  jobName      String
+  batchType    String   // FULL | INCREMENTAL
+  status       String   @default("running") // running | success | failed
+  startedAt    DateTime @default(now())
+  finishedAt   DateTime?
+  recordsRead  Int      @default(0)
+  recordsWritten Int    @default(0)
+  error        String?
+
+  @@index([jobName, startedAt])
+  @@index([status])
+}
+
+// ============ Materialized View (Logical) ============
+// در SQLite از materialized view پشتیبانی نمی‌شود؛ اما می‌توان این الگو را
+// با جدول ذخیره‌ساز نتایج query های پرتکرار پیاده‌سازی کرد.
+// مثال: MvInvoiceDaily — مجموع فاکتورهای روزانه به تفکیک tenant.
+
+model MvInvoiceDaily {
+  id           String   @id @default(cuid())
+  tenantKey    String
+  dateKey      String
+  invoiceCount Int      @default(0)
+  totalAmount  BigInt   @default(0)
+  totalTax     BigInt   @default(0)
+  totalPaid    BigInt   @default(0)
+  updatedAt    DateTime @updatedAt
+
+  @@unique([tenantKey, dateKey])
+  @@index([dateKey])
+}
+
+model MvRevenueByTenant {
+  id           String   @id @default(cuid())
+  tenantKey    String
+  monthKey     String   // YYYYMM
+  revenue      BigInt   @default(0)
+  invoiceCount Int      @default(0)
+  updatedAt    DateTime @updatedAt
+
+  @@unique([tenantKey, monthKey])
+}

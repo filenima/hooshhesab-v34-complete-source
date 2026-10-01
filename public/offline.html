@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>هوش — حالت آفلاین</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: Tahoma, Arial, sans-serif;
+    background: linear-gradient(135deg, #12304A 0%, #1F8477 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    padding: 20px;
+  }
+  .card {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 20px;
+    padding: 40px 32px;
+    max-width: 420px;
+    width: 100%;
+    text-align: center;
+    backdrop-filter: blur(10px);
+  }
+  .icon {
+    width: 72px; height: 72px;
+    margin: 0 auto 20px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.15);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 34px;
+  }
+  h1 { font-size: 20px; margin-bottom: 12px; }
+  p { font-size: 14px; line-height: 1.9; opacity: 0.9; margin-bottom: 8px; }
+  ul { text-align: right; font-size: 13px; line-height: 2; opacity: 0.85; margin: 12px 24px 20px; }
+  button {
+    background: #fff;
+    color: #12304A;
+    border: none;
+    border-radius: 12px;
+    padding: 12px 36px;
+    font-size: 15px;
+    font-weight: bold;
+    font-family: inherit;
+    cursor: pointer;
+    transition: transform 0.15s;
+  }
+  button:hover { transform: translateY(-2px); }
+  small { display: block; margin-top: 16px; opacity: 0.6; font-size: 11px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon" aria-hidden="true">
+      <svg xmlns="http://www.w3.org/2000/svg" width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h.01"/><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="2" y1="2" x2="22" y2="22"/></svg>
+    </div>
+    <h1>اتصال اینترنت قطع است</h1>
+    <p>صفحه‌هایی که قبلاً باز کرده‌اید از حافظهٔ آفلاین در دسترس‌اند، اما برای ثبت فاکتور و کار با داده‌های زنده به اینترنت نیاز است.</p>
+    <ul>
+      <li>مطالب بلاگ و صفحات آموزشی: آفلاین قابل مطالعه</li>
+      <li>آخرین صفحه‌های بازشده: از حافظه بارگذاری می‌شوند</li>
+      <li>ثبت فاکتور و گزارش زنده: پس از اتصال اینترنت</li>
+    </ul>
+    <button onclick="location.reload()">تلاش مجدد</button>
+    <small>هوش — نرم‌افزار حسابداری هوشمند | نسخهٔ آفلاین PWA</small>
+  </div>
+  <script>
+    // تلاش خودکار وقتی اینترنت برگشت
+    window.addEventListener('online', function () { location.reload(); });
+  </script>
+</body>
+</html>

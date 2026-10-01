@@ -1,0 +1,612 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "هوش Public API",
+    "description": "مستندات رسمی API عمومی هوش — نرم‌افزار هوشمند حسابداری ایرانی.\n\n## احراز هویت\n\nتمام endpointها نیاز به Bearer Token دارند:\n\n```\nAuthorization: Bearer <api-key>\n```\n\nبرای دریافت API key، به پنل همکاران مراجعه کنید.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "هوش",
+      "url": "https://hoosh.nobatime.ir",
+      "email": "api@hoosh.nobatime.ir"
+    },
+    "license": {
+      "name": "Proprietary",
+      "url": "https://hoosh.nobatime.ir/terms"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.hoosh.nobatime.ir",
+      "description": "Production"
+    },
+    {
+      "url": "https://staging.api.hoosh.nobatime.ir",
+      "description": "Staging"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "API Key"
+      }
+    },
+    "schemas": {
+      "Invoice": {
+        "type": "object",
+        "required": ["number", "type", "partyId", "date"],
+        "properties": {
+          "id": { "type": "string", "readOnly": true },
+          "number": { "type": "string", "description": "شماره فاکتور" },
+          "type": { "type": "string", "enum": ["SALE", "PURCHASE", "PRE_INVOICE", "RETURN"] },
+          "partyId": { "type": "string" },
+          "date": { "type": "string", "format": "date-time" },
+          "dueDate": { "type": "string", "format": "date-time" },
+          "subtotal": { "type": "integer", "description": "مبلغ به ریال" },
+          "discount": { "type": "integer" },
+          "tax": { "type": "integer" },
+          "total": { "type": "integer" },
+          "currency": { "type": "string", "default": "IRR", "enum": ["IRR", "USD", "EUR", "AED"] },
+          "status": { "type": "string", "enum": ["DRAFT", "SENT", "PAID", "CANCELLED"], "readOnly": true }
+        }
+      },
+      "Party": {
+        "type": "object",
+        "required": ["name", "type"],
+        "properties": {
+          "id": { "type": "string", "readOnly": true },
+          "name": { "type": "string" },
+          "type": { "type": "string", "enum": ["CUSTOMER", "SUPPLIER", "EMPLOYEE", "OTHER"] },
+          "nationalId": { "type": "string", "description": "شناسه ملی / کد ملی" },
+          "economicCode": { "type": "string", "description": "کد اقتصادی" },
+          "phone": { "type": "string" },
+          "email": { "type": "string", "format": "email" },
+          "address": { "type": "string" }
+        }
+      },
+      "Product": {
+        "type": "object",
+        "required": ["name", "code"],
+        "properties": {
+          "id": { "type": "string", "readOnly": true },
+          "name": { "type": "string" },
+          "code": { "type": "string" },
+          "barcode": { "type": "string" },
+          "unit": { "type": "string" },
+          "salePrice": { "type": "integer" },
+          "purchasePrice": { "type": "integer" },
+          "taxRate": { "type": "number", "default": 0.09 }
+        }
+      },
+      "Payment": {
+        "type": "object",
+        "required": ["amount", "method", "date"],
+        "properties": {
+          "id": { "type": "string", "readOnly": true },
+          "amount": { "type": "integer", "description": "مبلغ به ریال" },
+          "method": { "type": "string", "enum": ["CASH", "BANK_TRANSFER", "CHECK", "CARD", "ONLINE"] },
+          "date": { "type": "string", "format": "date-time" },
+          "invoiceId": { "type": "string" },
+          "reference": { "type": "string" },
+          "bankAccountId": { "type": "string" }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": { "type": "string" },
+          "code": { "type": "string" },
+          "details": { "type": "object" }
+        }
+      }
+    },
+    "parameters": {
+      "TenantId": {
+        "name": "x-tenant-id",
+        "in": "header",
+        "required": true,
+        "schema": { "type": "string" },
+        "description": "شناسه‌ی tenant (سازمان)"
+      },
+      "PageParam": {
+        "name": "page",
+        "in": "query",
+        "schema": { "type": "integer", "default": 1 }
+      },
+      "LimitParam": {
+        "name": "limit",
+        "in": "query",
+        "schema": { "type": "integer", "default": 20, "maximum": 100 }
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "احراز هویت ناموفق",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "منبع یافت نشد",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" }
+          }
+        }
+      },
+      "RateLimited": {
+        "description": "نرخ درخواست بیش از حد",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" }
+          }
+        }
+      }
+    }
+  },
+  "security": [{ "bearerAuth": [] }],
+  "paths": {
+    "/v1/invoices": {
+      "get": {
+        "summary": "لیست فاکتورها",
+        "description": "دریافت لیست فاکتورها با pagination و فیلتر",
+        "parameters": [
+          { "$ref": "#/components/parameters/TenantId" },
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/LimitParam" },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": { "type": "string", "enum": ["SALE", "PURCHASE", "PRE_INVOICE", "RETURN"] }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": { "type": "string", "format": "date" }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": { "type": "string", "format": "date" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "لیست فاکتورها",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "invoices": { "type": "array", "items": { "$ref": "#/components/schemas/Invoice" } },
+                    "total": { "type": "integer" },
+                    "page": { "type": "integer" },
+                    "limit": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      },
+      "post": {
+        "summary": "ایجاد فاکتور جدید",
+        "parameters": [{ "$ref": "#/components/parameters/TenantId" }],
+        "requestBody": {
+          required: true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/Invoice" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "فاکتور ایجاد شد",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Invoice" }
+              }
+            }
+          },
+          "400": {
+            "description": "ورودی نامعتبر",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/v1/invoices/{id}": {
+      "get": {
+        "summary": "دریافت یک فاکتور",
+        "parameters": [
+          { "$ref": "#/components/parameters/TenantId" },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "جزئیات فاکتور",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Invoice" } }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "put": {
+        "summary": "به‌روزرسانی فاکتور",
+        "parameters": [
+          { "$ref": "#/components/parameters/TenantId" },
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          required: true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/Invoice" } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "فاکتور به‌روزرسانی شد",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Invoice" } }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "حذف فاکتور",
+        "parameters": [
+          { "$ref": "#/components/parameters/TenantId" },
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "204": { "description": "حذف شد" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/v1/parties": {
+      "get": {
+        "summary": "لیست طرف‌حساب‌ها",
+        "parameters": [
+          { "$ref": "#/components/parameters/TenantId" },
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/LimitParam" },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": { "type": "string", "enum": ["CUSTOMER", "SUPPLIER", "EMPLOYEE", "OTHER"] }
+          },
+          { "name": "search", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "لیست طرف‌حساب‌ها",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "parties": { "type": "array", "items": { "$ref": "#/components/schemas/Party" } },
+                    "total": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "ایجاد طرف‌حساب",
+        "parameters": [{ "$ref": "#/components/parameters/TenantId" }],
+        "requestBody": {
+          required: true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/Party" } }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "طرف‌حساب ایجاد شد",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Party" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/products": {
+      "get": {
+        "summary": "لیست کالاها",
+        "parameters": [
+          { "$ref": "#/components/parameters/TenantId" },
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/LimitParam" }
+        ],
+        "responses": {
+          "200": {
+            "description": "لیست کالاها",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "products": { "type": "array", "items": { "$ref": "#/components/schemas/Product" } },
+                    "total": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "ایجاد کالا",
+        "parameters": [{ "$ref": "#/components/parameters/TenantId" }],
+        "requestBody": {
+          required: true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/Product" } }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "کالا ایجاد شد",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Product" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/payments": {
+      "get": {
+        "summary": "لیست پرداخت‌ها",
+        "parameters": [
+          { "$ref": "#/components/parameters/TenantId" },
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/LimitParam" }
+        ],
+        "responses": {
+          "200": {
+            "description": "لیست پرداخت‌ها",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "payments": { "type": "array", "items": { "$ref": "#/components/schemas/Payment" } },
+                    "total": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "ثبت پرداخت",
+        "parameters": [{ "$ref": "#/components/parameters/TenantId" }],
+        "requestBody": {
+          required: true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/Payment" } }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "پرداخت ثبت شد",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Payment" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reports/{type}": {
+      "get": {
+        "summary": "دریافت گزارش مالی",
+        "description": "گزارش‌های موجود: balance-sheet, profit-loss, cash-flow, trial-balance, general-ledger",
+        "parameters": [
+          { "$ref": "#/components/parameters/TenantId" },
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": ["balance-sheet", "profit-loss", "cash-flow", "trial-balance", "general-ledger"]
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "format": "date" }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "format": "date" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "گزارش مالی",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/ai/categorize": {
+      "post": {
+        "summary": "دسته‌بندی هوشمند آیتم‌های فاکتور",
+        "description": "پیشنهاد کد حساب معین برای آیتم‌های فاکتور با هوش مصنوعی",
+        "parameters": [{ "$ref": "#/components/parameters/TenantId" }],
+        "requestBody": {
+          required: true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "description": { "type": "string" },
+                        "amount": { "type": "number" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "پیشنهاد دسته‌بندی",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "description": { "type": "string" },
+                          "suggestedAccount": { "type": "string" },
+                          "suggestedCategory": { "type": "string" },
+                          "confidence": { "type": "number" },
+                          "rationale": { "type": "string" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/webhooks": {
+      "get": {
+        "summary": "لیست webhookهای ثبت‌شده",
+        "parameters": [{ "$ref": "#/components/parameters/TenantId" }],
+        "responses": {
+          "200": {
+            "description": "لیست webhookها",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object" }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "ثبت webhook",
+        "parameters": [{ "$ref": "#/components/parameters/TenantId" }],
+        "requestBody": {
+          required: true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "url": { "type": "string", "format": "uri" },
+                  "events": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "invoice.created, payment.received, etc."
+                  },
+                  "secret": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "webhook ثبت شد"
+          }
+        }
+      }
+    },
+    "/v1/modian/invoices": {
+      "post": {
+        "summary": "ارسال فاکتور به سامانه مودیان",
+        "description": "ارسال صورتحساب الکترونیکی به دارایی",
+        "parameters": [{ "$ref": "#/components/parameters/TenantId" }],
+        "requestBody": {
+          required: true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "invoiceId": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "وضعیت ارسال",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" },
+                    "uid": { "type": "string" },
+                    "refId": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    { "name": "accounting", "description": "حسابداری" },
+    { "name": "inventory", "description": "انبار" },
+    { "name": "treasury", "description": "خزانه‌داری" },
+    { "name": "reports", "description": "گزارش‌ها" },
+    { "name": "ai", "description": "هوش مصنوعی" },
+    { "name": "integration", "description": "اتصال" },
+    { "name": "tax", "description": "مالیات" }
+  ]
+}

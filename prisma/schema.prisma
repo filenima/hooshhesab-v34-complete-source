@@ -1,0 +1,3441 @@
+// Prisma schema - هوش‌حساب AI-Powered Accounting Platform (v2 — production)
+// SQLite datasource. مبالغ به‌صورت Int (ریال) ذخیره می‌شوند برای دقت کامل.
+// multi-tenancy با tenantId، soft delete با deletedAt، index روی FKها.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============ Tenant (سازمان/شرکت) ============
+model Tenant {
+  id          String   @id @default(cuid())
+  name        String
+  subdomain   String?  @unique
+  plan        String   @default("starter") // starter | business | enterprise | accountant
+  status      String   @default("active") // active | suspended | cancelled
+  modianEnabled   Boolean   @default(false)
+  modianUsername  String?
+  modianPassword  String?
+  modianBookletId Int      @default(1)
+  modianLastSync  DateTime?
+  // برندینگ فاکتور — برای کسب‌وکارهای کوچک (لوگو، شعار، وب‌سایت، تلفن، آدرس روی پرینت فاکتور)
+  logoUrl        String?  // لوگوی کسب‌وکار روی فاکتور چاپی
+  invoiceSlogan  String?  // شعار یا متن دلخواه روی فاکتور
+  invoiceWebsite String?  // وب‌سایت کسب‌وکار روی فاکتور
+  invoicePhone   String?  // تلفن تماس روی فاکتور
+  invoiceAddress String?  // آدرس روی فاکتور
+  // طرح رسید فاکتور (v33-b) — تنظیمات استودیوی رسید چاپی
+  //   receiptTemplate: شناسهٔ قالب (modern|boutique|classic|bold|lux)
+  //   receiptWidthMm : عرض کاغذ رسید — ۵۸/۸۰ (کارتخوان) / ۱۴۸ (A5) / ۲۱۰ (A4) / سفارشی
+  //   receiptAccent  : رنگ تأکیدی قالب (خانوادهٔ زمردی/فیروزه‌ای — بدون آبی/نیلی)
+  //   receiptOptions : JSON گزینه‌ها {showQr,showLogo,showBarcode,showCashier,footerMessage,fontSize}
+  receiptTemplate String  @default("modern") // قالب انتخابی رسید
+  receiptWidthMm  Int     @default(80)       // اندازهٔ خودکار کاغذ (mm)
+  receiptAccent   String  @default("#0f766e") // teal-700 — رنگ تأکیدی
+  receiptOptions  String?                     // JSON گزینه‌های نمایش
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users              User[]
+  accountGroups     AccountGroup[]
+  accounts          Account[]
+  subAccounts       SubAccount[]
+  detailAccounts    DetailAccount[]
+  journalEntries    JournalEntry[]
+  fiscalYears       FiscalYear[]
+  costCenters       CostCenter[]
+  warehouses        Warehouse[]
+  productCategories ProductCategory[]
+  products          Product[]
+  stockItems        StockItem[]
+  stockMovements    StockMovement[]
+  parties           Party[]
+  invoices          Invoice[]
+  bankAccounts      BankAccount[]
+  checks            Check[]
+  pettyCash         PettyCash[]
+  loans             Loan[]
+  employees         Employee[]
+  payrolls          Payroll[]
+  timeEntries       TimeEntry[]
+  leaveRequests     LeaveRequest[]
+  annualBonuses     AnnualBonus[]
+  contacts          Contact[]
+  followUps         FollowUp[]
+  reminders         Reminder[]
+  loyaltyMembers    LoyaltyMember[]
+  boms              BOM[]
+  productionOrders  ProductionOrder[]
+  projects          Project[]
+  projectTransactions ProjectTransaction[]
+  expenseEntries    ExpenseEntry[]
+  aiConversations   AIConversation[]
+  auditLogs         AuditLog[]
+  webhooks          Webhook[]
+  integrations      Integration[]
+  supportTickets    SupportTicket[]
+  licenses          License[]
+  ecosystemConnections EcosystemConnection[]
+  tenantMembers     TenantMember[]
+  apiKeys           ApiKey[]
+  budgets           Budget[]
+  emailTemplates    EmailTemplate[]
+  workflows         Workflow[]
+  savedSearches     SavedSearch[]
+  tags              Tag[]
+  documentVersions  DocumentVersion[]
+  documentTemplates DocumentTemplate[]
+  ecosystemWebhooks EcosystemWebhook[]
+  pushSubscriptions PushSubscription[]
+  emailSequenceEnrollments EmailSequenceEnrollment[]
+  priceAlerts       PriceAlert[]
+  forecastRecords   ForecastRecord[]
+  loyaltyPoints     LoyaltyPoint[]
+  emailABTests      EmailABTest[]
+  domainEvents      DomainEvent[]
+  npsSurveys        NPSSurvey[]
+  customReports     CustomReport[]
+  crmNotes          CrmNote[]
+  logEntries        LogEntry[]
+  modianWebhookEvents ModianWebhookEvent[]
+  modianSyncLogs    ModianSyncLog[]
+  marketPriceSync   MarketPriceSync[]
+  // ============ CRM قدرتمند (سطح tenant) ============
+  crmDeals          CrmDeal[]
+  crmActivities     CrmActivity[]
+
+  // ============ CRM (پلتفرم سوپرادمین) ============
+  // مرحله‌ی CRM برای این tenant: lead | trial | active | churned
+  crmStage          String?  // null = مدیریت خودکار بر اساس status/لایسنس
+  // تماس‌دهنده‌ی اصلی (از دید CRM پلتفرم) — معمولاً ادمین tenant
+  contactName       String?
+  contactEmail      String?
+  contactPhone      String?
+  // آخرین فعالیت (به‌روزرسانی توسط API‌های CRM)
+  lastActivityAt    DateTime?
+  // درآمد تجمعی تقریبی از این tenant (ریال)
+  totalRevenue      Int      @default(0)
+
+  // ============ PROD-V5: ماژول‌های رقبا (پورتال، دارایی ثابت، مغایرت‌گیری) ============
+  customerPortalAccess CustomerPortalAccess[]
+  portalSessions       PortalSession[]
+  fixedAssets          FixedAsset[]
+  depreciationEntries  DepreciationEntry[]
+  bankReconciliations  BankReconciliation[]
+
+  // ============ شمارنده اتمیک اسناد (ضد شرط مسابقه) ============
+  // هر (tenant, entityType, fiscalYear) یک شمارنده مستقل دارد.
+  // تولید شماره‌ی فاکتور/سند به‌جای count+1 از increment اتمیک استفاده می‌کند.
+  sequences             DocumentSequence[]
+
+  // ============ SESSION-7: مدل‌های جدید (واتس‌اپ/بیمه/چت/ایمیل دوره‌ای/دامنه...) ============
+  insurancePolicies    InsurancePolicy[]
+  receiptScans         ReceiptScan[]
+  bankStatementImports BankStatementImport[]
+  scheduledReports     ScheduledReport[]
+  tenantDomains        TenantDomain[]
+  supportChatSessions  SupportChatSession[]
+  webhookDeliveries    WebhookDelivery[]
+  bugReports     BugReport[]
+  // Task 24 — کیف پول و برداشت (صاحب کیف پول = شرکت)
+  walletTransactions  WalletTransaction[]
+  withdrawalRequests  WithdrawalRequest[]
+}
+
+// ============ شمارنده اتمیک اسناد (پادزهرِ M2 — شرط مسابقه در تولید شماره) ============
+// به‌جای الگوی racy «count() + 1»، این جدول با update ... inc در یک تراکنش
+// اتمیک، lastNumber را یک واحد افزایش می‌دهد و مقدار جدید را برمی‌گرداند.
+// کلید یکتای (tenantId, entityType, fiscalYear) تضمین می‌کند که در هر سال مالی،
+// هر نوع سند سری جداگانه و پیوسته داشته باشد.
+model DocumentSequence {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  entityType   String   // "INVOICE" | "PURCHASE" | "RECEIPT" | "PAYMENT" | "JOURNAL" | ...
+  fiscalYear   Int      // سال شمسی (مثلاً 1404)
+  prefix       String   @default("") // پیشوند اختیاری، مثلاً "INV"
+  lastNumber   Int      @default(0)
+  updatedAt    DateTime @updatedAt
+  createdAt    DateTime @default(now())
+
+  @@unique([tenantId, entityType, fiscalYear])
+  @@index([tenantId, entityType])
+}
+
+// ============ API Keys (programmatic access) ============
+
+model ApiKey {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  keyPrefix   String   // 8 chars first for display
+  keyHash     String   @unique // SHA-256 hash of full key
+  scopes      String   // JSON array: ["read:invoices", "write:invoices", ...]
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  isActive    Boolean  @default(true)
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([keyHash])
+}
+
+// ============ System Settings (key/value) ============
+
+model SystemSettings {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+// ============ محتوای سایت (ویرایشگر بصری صفحه فرود) ============
+// ردیف واحد (id="main") — overrides یک JSON رشته‌ای از SiteContentOverrides است:
+// { fields: Record<string,string>, hidden: string[], order: string[], custom: [...] }
+// (طبق قواعد پروژه: فقط نوع‌های primitive — لیست‌ها به‌صورت JSON string)
+
+model SiteContent {
+  id        String   @id @default("main")
+  overrides String   @default("{}")
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+}
+
+// ============ ماژول ۱: هسته حسابداری ============
+
+model AccountGroup {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  code      String
+  name      String
+  type      String   // BALANCE_SHEET | PROFIT_LOSS
+  nature    String   // DEBIT | CREDIT
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  accounts Account[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+}
+
+model Account {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  code        String
+  name        String
+  groupId     String
+  group       AccountGroup @relation(fields: [groupId], references: [id])
+  nature      String   // DEBIT | CREDIT
+  balanceType String   // GENERAL | DETAIL
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+
+  subAccounts   SubAccount[]
+  journalLines  JournalLine[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, groupId])
+}
+
+model SubAccount {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  code         String
+  name         String
+  accountId    String
+  account      Account  @relation(fields: [accountId], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  details      DetailAccount[]
+  journalLines JournalLine[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, accountId])
+}
+
+model DetailAccount {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  code          String
+  name          String
+  subAccountId  String
+  subAccount    SubAccount @relation(fields: [subAccountId], references: [id])
+  partyType     String?  // CUSTOMER | SUPPLIER | EMPLOYEE | BANK | CASH | OTHER
+  partyId       String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  deletedAt     DateTime?
+
+  @@unique([tenantId, code])
+  @@index([tenantId, subAccountId])
+}
+
+model JournalEntry {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  number        Int
+  date          DateTime
+  type          String   // JOURNAL | RECEIPT | PAYMENT
+  description   String
+  status        String   @default("DRAFT") // DRAFT | POSTED | REVERSED
+  fiscalYearId  String?
+  fiscalYear    FiscalYear? @relation(fields: [fiscalYearId], references: [id])
+  attachmentUrl String?
+  // FIX(3b-بیگ‌۲): سندِ خودکارِ فاکتور به فاکتور وصل است — برای یافتن/ابطال سند
+  // هنگام حذف/ابطال فاکتور و جلوگیری از ثبت سند تکراری برای یک فاکتور
+  sourceInvoiceId String?
+  createdBy     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  deletedAt     DateTime?
+
+  lines JournalLine[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, date])
+  @@index([tenantId, status])
+  // composite برای کوئری‌های گزارش سند بر اساس تاریخ و وضعیت
+  @@index([tenantId, date, status])
+  @@index([tenantId, fiscalYearId, status])
+  // سند خودکار فاکتور — جستجوی سریع و یکتایی سندِ هر فاکتور
+  @@index([tenantId, sourceInvoiceId])
+}
+
+model JournalLine {
+  id              String   @id @default(cuid())
+  tenantId        String
+  journalEntryId  String
+  journalEntry    JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  accountId       String
+  account         Account  @relation(fields: [accountId], references: [id])
+  subAccountId    String?
+  subAccount      SubAccount? @relation(fields: [subAccountId], references: [id])
+  detailAccountId String?
+  // FIX(3b-بیگ‌۱) CRITICAL: مبالغ به ریال (BigInt) — قبلاً Int (۳۲بیتی) بود و
+  // سند بالای ~۲.۱ میلیارد ریال (۲۱۴,۷۴۸,۳۶۴ ریال) با خطای Prisma کرش می‌کرد.
+  // SQLite بصری‌سازی INTEGER →BIGINT بدون از دست رفتن داده انجام می‌شود.
+  debit           BigInt     @default(0)
+  credit          BigInt     @default(0)
+  description     String?
+  costCenterId    String?
+  createdAt       DateTime @default(now())
+
+  @@index([journalEntryId])
+  @@index([accountId])
+  @@index([tenantId, accountId])
+  @@index([subAccountId])
+}
+
+model FiscalYear {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  startDate DateTime
+  endDate   DateTime
+  status    String   @default("OPEN") // OPEN | CLOSED
+  isCurrent Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  entries JournalEntry[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model CostCenter {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  code      String
+  name      String
+  type      String   // COST | REVENUE
+  parentId  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+}
+
+// ============ ماژول ۲: انبار و کالا ============
+
+model Warehouse {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  code      String
+  name      String
+  address   String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  stockItems StockItem[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+}
+
+model ProductCategory {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  parentId  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  products Product[]
+
+  @@index([tenantId])
+}
+
+model Product {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sku           String
+  barcode       String?
+  name          String
+  categoryId    String?
+  category      ProductCategory? @relation(fields: [categoryId], references: [id])
+  unit          String
+  type          String   // GOODS | SERVICE | ASSEMBLY
+  valuation     String   @default("AVG")
+  // قیمت‌ها به ریال
+  purchasePrice BigInt      @default(0)
+  salePrice     BigInt      @default(0)
+  wholesalePrice BigInt     @default(0)
+  minStock      Float    @default(0)
+  maxStock      Float    @default(0)
+  // FIX(3b-بیگ‌۶): نرخ قانونی مالیات ارزش افزوده از ۱۴۰۴ = ۱۰٪ (قبلاً ۹٪)
+  taxRate       Float    @default(0.1)
+  // FIX(v4-مودیان/H4): شناسه کالا/خدمت نظام کدینگ (sstid) — برای صورتحساب‌های
+  // نوع ۱ (B2B) در سامانه مودیان الزامی است؛ از ماژول کالا قابل تنظیم است
+  goodsCode     String?
+  description   String?
+  imageUrl      String?
+  // ============ MARKET-SYNC: همگام‌سازی قیمت با نرخ بازار ============
+  // قیمت‌های پایه (ثبت‌شده در لحظه فعال‌سازی همگام‌سازی) — null یعنی کالا ردیابی نمی‌شود
+  baseSalePrice      BigInt?
+  basePurchasePrice  BigInt?
+  baseWholesalePrice BigInt?
+  marketSynced       Boolean @default(false)
+  // ============ USD-PRICE: قیمت پایه دلاری هر کالا (درخواست مالک) ============
+  // مثال: کالایی با قیمت ۱٫۷۴ دلار — با هر به‌روزرسانی نرخ دلار،
+  // قیمت فروش کالاهای usdSynced=true بازمحاسبه می‌شود: salePrice = usdPrice × نرخ
+  usdPrice     Float?    // قیمت پایه به دلار (اعشار مجاز)
+  usdSynced    Boolean   @default(false) // همگام‌سازی خودکار با نرخ دلار
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  deletedAt     DateTime?
+
+  stockItems   StockItem[]
+  invoiceItems InvoiceItem[]
+  bomItems     BOMItem[]
+  productions  ProductionOrderItem[]
+
+  @@unique([tenantId, sku])
+  @@index([tenantId, categoryId])
+  @@index([tenantId, name])
+  // جستجو با بارکد (PWA scan + point-of-sale lookup)
+  @@index([tenantId, barcode])
+}
+
+model StockItem {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productId    String
+  product      Product  @relation(fields: [productId], references: [id])
+  warehouseId  String
+  warehouse    Warehouse @relation(fields: [warehouseId], references: [id])
+  quantity     Float    @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([tenantId, productId, warehouseId])
+  @@index([productId, warehouseId])
+}
+
+model StockMovement {
+  id             String   @id @default(cuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productId      String
+  type           String   // IN | OUT | TRANSFER
+  quantity       Float
+  fromWarehouseId String?
+  toWarehouseId   String?
+  referenceType  String?  // INVOICE | RECEIPT | ISSUE | ADJUSTMENT | PRODUCTION
+  referenceId    String?
+  date           DateTime @default(now())
+  unitCost       BigInt?
+  createdAt      DateTime @default(now())
+
+  @@index([tenantId, productId])
+  @@index([tenantId, date])
+}
+
+// ============ ماژول ۳: خرید و فروش ============
+
+model Party {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  code          String
+  name          String
+  type          String   // CUSTOMER | SUPPLIER | BOTH
+  nationalId    String?
+  // FIX(3b-بیگ‌۸): ایندکس کور (blind index) کد ملی — nationalId با AES-GCM
+  // (IV تصادفی) رمز می‌شود و جستجوی contains هرگز match نمی‌شود؛ این ستون
+  // SHA-256 نرمال‌شدهٔ کد ملی است و فقط برای جستجو/تطبیق استفاده می‌شود.
+  nationalIdIndex String?
+  economicCode  String?
+  taxId         String?
+  phone         String?
+  mobile        String?
+  email         String?
+  address       String?
+  city          String?
+  province      String?
+  postalCode    String?
+  creditLimit   BigInt    @default(0)
+  openingBalance BigInt    @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  deletedAt     DateTime?
+
+  invoices   Invoice[]
+  checks     Check[]
+  contacts   Contact[]
+  // ============ PROD-V5: پورتال مشتریان ============
+  portalAccess CustomerPortalAccess[]
+  // ============ CRM قدرتمند ============
+  lifecycleStage String?  // LEAD | CUSTOMER | LOYAL | CHURNED — چرخه‌ی حیات مشتری
+  leadScore      Int?     @default(0)  // 0-100 — امتیاز خودکار سرنخ
+  industry       String?  // صنعت/حوزه فعالیت
+  deals          CrmDeal[]
+  activities     CrmActivity[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, name])
+  @@index([tenantId, mobile])
+  // جستجو با کد ملی / شناسه اقتصادی برای تطبیق اشخاص
+  @@index([tenantId, nationalId])
+  // جستجوی واقعی کد ملی از طریق ایندکس کور (3b-بیگ‌۸)
+  @@index([tenantId, nationalIdIndex])
+  @@index([tenantId, economicCode])
+  @@index([tenantId, lifecycleStage])
+}
+
+model Invoice {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  number       String
+  type         String   // SALE | PURCHASE | PRE_INVOICE | RETURN
+  partyId      String
+  party        Party    @relation(fields: [partyId], references: [id])
+  date         DateTime
+  dueDate      DateTime?
+  warehouseId  String?
+  // مبالغ به ریال
+  subtotal     BigInt      @default(0)
+  discount     BigInt      @default(0)
+  tax          BigInt      @default(0)
+  otherCosts   BigInt      @default(0)
+  total        BigInt      @default(0)
+  paidAmount   BigInt      @default(0)
+  // چندارزی — ارز فاکتور (IRR پیش‌فرض) و نرخ تبدیل به ریال هنگام ثبت
+  currency     String   @default("IRR") // IRR | TOMAN | USD | EUR | AED | GBP | TRY | CNY | SAR
+  exchangeRate Float?   @default(1) // نرخ تبدیل ارز به IRR هنگام ثبت (چون مبالغ داخلی به ریال ذخیره می‌شوند) — TOMAN = ۱۰
+  status       String   @default("DRAFT")
+  // Task 21-B: نوع پرداخت فاکتور — CASH (نقدی) | CREDIT (قرضی/نسیه)
+  // REQUIRED: بعد از استقرار نسخه، روی سرور مالک «bun run db:push» اجرا شود
+  // (افزودن ستون با default — بدون از دست رفتن داده؛ SQLite).
+  paymentType  String   @default("CASH") // CASH | CREDIT
+  modianStatus String?
+  modianUid    String?
+  modianRefId  String?
+  // ارسال به محیط آزمایشی مودیان (کارپوشه تست) — فاکتور تستی هرگز به سازمان واقعی نرفته
+  modianTest   Boolean  @default(false)
+  description  String?
+  createdBy    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  items InvoiceItem[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, date])
+  @@index([tenantId, status])
+  @@index([tenantId, partyId])
+  // composite برای کوئری‌های گزارش فاکتور بر اساس تاریخ و وضعیت
+  @@index([tenantId, date, status])
+  @@index([tenantId, type, status])
+  // ایندکس‌های مودیان برای جستجوی سریع وب‌هوک و وضعیت
+  @@index([modianUid])
+  @@index([modianStatus])
+}
+
+model InvoiceItem {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  productId   String?
+  product     Product? @relation(fields: [productId], references: [id])
+  description String
+  quantity    Float   @default(1)
+  unitPrice   BigInt     @default(0)
+  discount    Float   @default(0)
+  // FIX(3b-بیگ‌۶): پیش‌فرض ۱۰٪ — مطابق نرخ قانونی ۱۴۰۴+
+  taxRate     Float   @default(0.1)
+  taxAmount   BigInt     @default(0)
+  total       BigInt     @default(0)
+
+  @@index([invoiceId])
+  @@index([productId])
+}
+
+// ============ ماژول ۴: مالی و خزانه‌داری ============
+
+model BankAccount {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  bankName      String
+  branch        String?
+  accountNumber String
+  cardNumber    String?
+  shaba         String?
+  type          String   // CURRENT | SAVING | LOAN
+  balance       BigInt    @default(0)
+  currency      String   @default("IRR")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  deletedAt     DateTime?
+
+  // ============ PROD-V5: مغایرت‌گیری بانکی ============
+  reconciliations BankReconciliation[]
+
+  @@unique([tenantId, accountNumber])
+  @@index([tenantId])
+}
+
+model Check {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  number        String
+  type          String   // RECEIVED | ISSUED
+  sayadId       String?
+  status        String   @default("REGISTERED")
+  amount        BigInt
+  issueDate     DateTime
+  dueDate       DateTime
+  bankName      String
+  branch        String?
+  partyId       String?
+  party         Party?   @relation(fields: [partyId], references: [id])
+  bankAccountId String?
+  description   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  deletedAt     DateTime?
+
+  @@unique([tenantId, number])
+  @@index([tenantId, dueDate])
+  @@index([tenantId, status])
+  // composite برای کوئری «چک‌های سررسید پرداختی/دریافتی»
+  @@index([tenantId, dueDate, status])
+  @@index([tenantId, partyId, status])
+}
+
+model PettyCash {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  custodian   String?
+  balance     Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+
+  @@index([tenantId])
+}
+
+model Loan {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  title        String
+  principal    BigInt
+  interestRate Float   @default(0)
+  installments Int     @default(1)
+  startDate    DateTime
+  partyId      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt   DateTime?
+
+  @@index([tenantId])
+}
+
+// ============ ماژول ۵: حقوق و دستمزد ============
+
+model Employee {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  personnelCode String
+  firstName     String
+  lastName      String
+  nationalId    String
+  contractType  String   // PERMANENT | PROBATION | TEMPORARY
+  baseSalary    BigInt      @default(0)
+  insuranceCode String?
+  taxCode       String?
+  hireDate      DateTime
+  status        String   @default("ACTIVE")
+  department    String?
+  position      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  deletedAt     DateTime?
+
+  payrolls      Payroll[]
+  timeEntries   TimeEntry[]
+  leaveRequests LeaveRequest[]
+  annualBonuses AnnualBonus[]
+
+  @@unique([tenantId, personnelCode])
+  @@index([tenantId, status])
+}
+
+model Payroll {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employeeId  String
+  employee    Employee @relation(fields: [employeeId], references: [id])
+  month       Int
+  year        Int
+  baseSalary  BigInt
+  overtime    BigInt      @default(0)
+  bonus       BigInt      @default(0)
+  insurance   BigInt      @default(0)
+  tax         BigInt      @default(0)
+  total       BigInt      @default(0)
+  status      String   @default("DRAFT")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, employeeId, month, year])
+  @@index([tenantId, year, month])
+}
+
+// ============ ماژول ۵-ب: زمان و حضور (Time & Attendance) ============
+model TimeEntry {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employeeId  String
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  // CHECK_IN | CHECK_OUT
+  type        String
+  timestamp   DateTime
+  // ISO date (YYYY-MM-DD) — برای جستجوی سریع روزانه
+  workDate    String
+  // هشدار تأخیر یا خروج زودهنگام (دقیقه؛ مثبت = دیرکرد ورود، منفی = خروج زودتر)
+  lateMinutes Int      @default(0)
+  earlyMinutes Int     @default(0)
+  // یادداشت اختیاری (مثلاً دلیل تأخیر)
+  note        String?
+  // مبدأ ثبت: WEB | BIOMETRIC | CARD | MANUAL
+  source      String   @default("WEB")
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, employeeId, workDate])
+  @@index([tenantId, workDate])
+}
+
+// ============ ماژول ۵-ج: مدیریت مرخصی (Leave Management) ============
+model LeaveRequest {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employeeId  String
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  // نوع مرخصی: ANNUAL | SICK | UNPAID | MARRIAGE | HAJJ
+  type        String
+  // ISO date (YYYY-MM-DD)
+  startDate   String
+  endDate     String
+  // تعداد روزهای مرخصی (محاسبه‌شده در زمان ثبت)
+  days        Int
+  reason      String?
+  // PENDING | APPROVED | REJECTED
+  status      String   @default("PENDING")
+  approverId  String?
+  approvedAt  DateTime?
+  rejectReason String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId, status])
+  @@index([tenantId, employeeId])
+  @@index([tenantId, startDate])
+}
+
+// ============ ماژول ۵-د: عیدی و سنوات (Annual Bonus) ============
+model AnnualBonus {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employeeId  String
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  year        Int
+  // نوع پرداخت: EID | SANAVAT | YEAR_END_BONUS
+  type        String
+  // مبلغ به ریال (در DB BigInt)
+  baseSalary  BigInt
+  yearsOfService Float
+  // عیدی: ۲ × حقوق پایه (سقف‌دار بر ۳ × حداقل دستمزد)
+  eidAmount   BigInt   @default(0)
+  // سنوات: روزانه به ازای هر سال کارکرد
+  sanavatAmount BigInt @default(0)
+  // پاداش پایان سال (اختیاری، دلخواه)
+  bonusAmount  BigInt  @default(0)
+  total        BigInt  @default(0)
+  status       String  @default("DRAFT") // DRAFT | PAID
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([tenantId, employeeId, year, type], name: "annual_bonus_unique")
+  @@index([tenantId, year])
+}
+
+// ============ ماژول ۱۱: CRM + باشگاه مشتریان ============
+
+model Contact {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  type      String   // LEAD | CUSTOMER | SUPPLIER
+  phone     String?
+  email     String?
+  company   String?
+  status    String   @default("NEW")
+  value     BigInt    @default(0)
+  notes     String?
+  partyId   String?
+  party     Party?   @relation(fields: [partyId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  followUps FollowUp[]
+
+  @@index([tenantId, status])
+}
+
+model FollowUp {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contactId String
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  type      String   // CALL | EMAIL | MEETING | TASK
+  subject   String
+  dueDate   DateTime
+  status    String   @default("PENDING")
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, dueDate])
+}
+
+model LoyaltyMember {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  partyId   String?  @unique
+  name      String
+  phone     String?
+  tier      String   @default("BRONZE") // BRONZE | SILVER | GOLD | PLATINUM
+  points    Int      @default(0)
+  totalSpent BigInt     @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, tier])
+}
+
+// ============ ماژول ۱۲: تولیدی ============
+
+model BOM {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  productId   String?  // محصول نهایی
+  version     Int      @default(1)
+  status      String   @default("ACTIVE")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+
+  items BOMItem[]
+  orders ProductionOrder[]
+
+  @@index([tenantId])
+}
+
+model BOMItem {
+  id        String @id @default(cuid())
+  bomId     String
+  bom       BOM    @relation(fields: [bomId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Float
+  unit      String
+
+  @@index([bomId])
+}
+
+model ProductionOrder {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  number      String
+  bomId       String
+  bom         BOM      @relation(fields: [bomId], references: [id])
+  quantity    Float
+  status      String   @default("PLANNED") // PLANNED | IN_PROGRESS | COMPLETED | CANCELLED
+  startDate   DateTime
+  endDate     DateTime?
+  costPerUnit BigInt      @default(0)
+  totalCost   BigInt      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items ProductionOrderItem[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status])
+}
+
+model ProductionOrderItem {
+  id               String @id @default(cuid())
+  productionOrderId String
+  productionOrder  ProductionOrder @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
+  productId        String
+  product          Product @relation(fields: [productId], references: [id])
+  quantityRequired Float
+  quantityConsumed Float  @default(0)
+
+  @@index([productionOrderId])
+}
+
+// ============ ماژول ۱۳: پیمانکاری ============
+
+model Project {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  code        String
+  name        String
+  clientId    String?
+  startDate   DateTime
+  endDate     DateTime?
+  contractValue BigInt    @default(0)
+  estimatedCosts BigInt @default(0)  // بودجه‌ی برآوردی هزینه‌ها
+  status      String   @default("ACTIVE") // ACTIVE | COMPLETED | SUSPENDED
+  progress    Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+
+  transactions ProjectTransaction[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, status])
+}
+
+// تراکنش‌های مرتبط با پروژه (هزینه و درآمد)
+model ProjectTransaction {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type        String   // COST | REVENUE
+  amount      BigInt   @default(0)
+  date        DateTime @default(now())
+  category    String?  // LABOR | MATERIAL | EQUIPMENT | SUBCONTRACT | OVERHEAD | OTHER
+  description String?
+  invoiceId   String?  // در صورت اتصال به فاکتور
+  createdBy   String?
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, projectId])
+  @@index([tenantId, type])
+  @@index([projectId, date])
+}
+
+// ============ یادآورهای هوشمند ============
+
+model Reminder {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  type      String   // CHECK_DUE | LOW_STOCK | BIRTHDAY | INVOICE_OVERDUE | CUSTOM
+  title     String
+  message   String
+  dueDate   DateTime
+  priority  String   @default("MEDIUM") // LOW | MEDIUM | HIGH
+  status    String   @default("PENDING") // PENDING | SENT | DISMISSED
+  entityId  String?
+  entityType String?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, dueDate])
+  @@index([tenantId, status])
+}
+
+// ============ ماژول ۱۴: امنیت و کاربران ============
+
+model User {
+  id              String   @id @default(cuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email           String   @unique
+  username        String?  @unique // نام کاربری قابل تغییر
+  name            String
+  family          String?  // نام خانوادگی
+  password        String   // bcrypt hashed
+  phone           String?
+  role            String   @default("USER") // ADMIN | ACCOUNTANT | MANAGER | USER
+  isActive        Boolean  @default(true)
+  isDemo          Boolean  @default(false) // کاربر دمو
+  isTrial         Boolean  @default(false) // کاربر تریال ۱۴ روزه
+  trialEndsAt     DateTime? // تاریخ پایان تریال
+  logoUrl         String?  // لوگوی شرکت
+  company         String?  // نام شرکت
+  nationalId      String?  // شناسه ملی شرکت
+  address         String?  // آدرس
+  twoFactorEnabled    Boolean @default(false)
+  twoFactorSecret     String?
+  twoFactorBackupCodes String? // AES-256-GCM encrypted JSON array of backup codes
+  // FIX(22-B): نسخه رمزنگاری‌شده قابل بازیابی (AES-256-GCM با ENCRYPTION_KEY سرور)
+  // برای قابلیت «نمایش/کپی رمز» در حساب کاربری — درخواست الزامی مالک.
+  // امنیت: فقط با کلید سرور باز می‌شود؛ هر درخواست نمایش rate-limit + AuditLog دارد.
+  passwordEnc        String?
+  lastLogin       DateTime?
+  lastLoginIp     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deletedAt       DateTime?
+
+  auditLogs      AuditLog[]
+  aiMessages     AIMessage[]
+  sessions       UserSession[]
+  tenantMembers  TenantMember[]
+  logEntries     LogEntry[]
+
+  @@index([tenantId])
+  @@index([isTrial])
+  @@index([isDemo])
+  // کوئری داشبورد سلامت: «کاربران فعال در ۲۴ ساعت گذشته»
+  @@index([lastLogin])
+  bugReports   BugReport[]
+  // Task 24 — درخواست‌های برداشت کیف پول
+  withdrawalRequests WithdrawalRequest[]
+}
+
+// ============ عضویت چندشرکتی (Multi-Tenant Membership) ============
+// یک کاربر می‌تواند به چندین شرکت (Tenant) دسترسی داشته باشد.
+// این مدل اتصال user↔tenant را نگه می‌دارد تا سوییچ بین شرکت‌ها ممکن شود.
+model TenantMember {
+  id        String   @id @default(cuid())
+  userId    String
+  tenantId  String
+  role      String   @default("ADMIN") // ADMIN | ACCOUNTANT | MANAGER | USER
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tenantId])
+  @@index([userId])
+  @@index([tenantId])
+}
+
+// ============ نشست‌های کاربر (برای مدیریت دستگاه‌ها) ============
+model UserSession {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token           String   @unique // JWT token
+  deviceFingerprint String // اثر انگشت دستگاه
+  deviceName      String?  // نام دستگاه (User-Agent)
+  ipAddress       String?
+  expiresAt       DateTime
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  lastUsedAt      DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String   // CREATE | UPDATE | DELETE | LOGIN | LOGOUT | VIEW | EXPORT | PRINT
+  entity    String
+  entityId  String?
+  changes   String?  // JSON
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([userId])
+  // جستجوی لاگ بر اساس موجودیت (entity) و اکشن
+  @@index([tenantId, entity, createdAt])
+  @@index([tenantId, entity, entityId])
+  @@index([tenantId, action, createdAt])
+  @@index([userId, createdAt])
+}
+
+// ============ هوش مصنوعی ============
+
+model AIConversation {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String?
+  title     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages AIMessage[]
+
+  @@index([tenantId])
+}
+
+model AIMessage {
+  id            String   @id @default(cuid())
+  conversationId String
+  conversation  AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId        String?
+  user          User?    @relation(fields: [userId], references: [id])
+  role          String   // USER | ASSISTANT | SYSTEM
+  content       String
+  tokensUsed    Int      @default(0)
+  toolUsed      String?  // نام ابزار استفاده‌شده (RAG)
+  createdAt     DateTime @default(now())
+
+  @@index([conversationId])
+  @@index([userId])
+}
+
+// ============ اعلان‌ها ============
+
+model Notification {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String?
+  title     String
+  message   String
+  type      String   // INFO | WARNING | ERROR | SUCCESS
+  isRead    Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+
+  // کوئری‌های رایج: «اعلان‌های من» و «شمارش خوانده‌نشده‌ی من»
+  @@index([tenantId, isRead])
+  @@index([userId, isRead])
+  @@index([createdAt])
+}
+
+// ============ اتصالات (Integrations) ============
+
+model Integration {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  type        String   // WOOCOMMERCE | DIGIKALA | BASALAM | MODIAN | PAYMENT | BANK
+  name        String
+  status      String   @default("PENDING") // PENDING | CONNECTED | ERROR | DISCONNECTED
+  config      String   // JSON
+  lastSync    DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  webhooks Webhook[]
+
+  @@index([tenantId, type])
+}
+
+model Webhook {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  integrationId String?
+  integration   Integration? @relation(fields: [integrationId], references: [id])
+  event       String   // invoice.created | invoice.paid | stock.low | check.due | order.placed
+  url         String
+  secret      String?
+  isActive    Boolean  @default(true)
+  lastFired   DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, event])
+}
+
+// ============ پشتیبانی ============
+
+model SupportTicket {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subject     String
+  description String
+  category    String   // BILLING | TECHNICAL | FEATURE_REQUEST | BUG | OTHER
+  priority    String   @default("MEDIUM") // LOW | MEDIUM | HIGH | URGENT
+  status      String   @default("OPEN") // OPEN | IN_PROGRESS | RESOLVED | CLOSED
+  userId      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  messages    TicketMessage[]
+
+  @@index([tenantId, status])
+  @@index([status, createdAt])
+  @@index([priority, status])
+}
+
+// ============ پیام‌های تیکت پشتیبانی ============
+// هر تیکت می‌تواند چندین پیام داشته باشد (مکالمه کاربر و سوپرادمین).
+model TicketMessage {
+  id          String   @id @default(cuid())
+  ticketId    String
+  ticket      SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  body        String
+  authorType  String   // USER | SUPER_ADMIN | SYSTEM
+  authorId    String?  // شناسه‌ی کاربر یا سوپرادمین (در پیام‌های سیستم null)
+  authorName  String?  // نام نویسنده برای نمایش سریع
+  isAdmin     Boolean  @default(false) // آیا این پیام از سمت ادمین/پشتیبانی است؟
+  attachments String?  // JSON [{url,name,size,type}] — پیوست‌های تصویری (حداکثر ۵MB هر کدام)
+  createdAt   DateTime @default(now())
+
+  @@index([ticketId, createdAt])
+  @@index([authorType])
+}
+
+// ============ سوپرادمین پلتفرم (مخفی) ============
+
+model SuperAdmin {
+  id            String   @id @default(cuid())
+  username      String   @unique
+  password      String   // bcrypt hashed
+  role          String   @default("SUPER_ADMIN")
+  isActive      Boolean  @default(true)
+  lastLogin     DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  licenses      License[]
+  auditLogs     PlatformAuditLog[]
+}
+
+// ============ لایسنس ============
+
+model License {
+  id                String   @id @default(cuid())
+  key               String   @unique // کلید لایسنس (نمایشی)
+  keyHash           String   @unique // هش کلید برای ذخیره امن
+  tenantId          String?  // tenant متصل (null = استفاده نشده)
+  tenant            Tenant?  @relation(fields: [tenantId], references: [id])
+  plan              String   // starter | business | enterprise | accountant
+  maxUsers          Int      @default(1)
+  maxInvoices       Int      @default(100) // فاکتور در ماه
+  maxWarehouses     Int      @default(1)
+  features          String   // JSON: لیست ماژول‌های فعال
+  status            String   @default("ACTIVE") // ACTIVE | SUSPENDED | EXPIRED | REVOKED
+  source            String?  // منبع ساخت لایسنس: "trial" (لایسنس تریال ۱۴ روزه) | "purchase" | null (سایر)
+  // v33-c: مبلغ واقعی پرداخت‌شده (تومان) — فقط برای لایسنس‌های خریداری‌شده
+  // (source="purchase"). null = قیمت مؤثر پلن ملاک است. لایسنس تریال هرگز
+  // مبلغ ندارد و هرگز درآمد حساب نمی‌شود.
+  amountToman       Int?
+  issuedBy          String?  // super admin id
+  superAdmin        SuperAdmin? @relation(fields: [issuedBy], references: [id])
+  startDate         DateTime @default(now())
+  endDate           DateTime? // null = دائمی
+  activationIp      String?
+  activationDevice  String?  // device fingerprint اولین فعال‌سازی
+  activatedAt       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  // ضد هک: تعداد تلاش‌های ناموفز
+  failedAttempts    Int      @default(0)
+  lastFailedAt      DateTime?
+  blockedDevices    String?  // JSON array of blocked device fingerprints
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([keyHash])
+  // گزارش «لایسنس‌های در حال انقضا» و کوئری‌های نگهداری
+  @@index([endDate])
+  @@index([status, endDate])
+}
+
+// ============ لاگ تغییرات پلتفرم ============
+
+model PlatformAuditLog {
+  id            String   @id @default(cuid())
+  superAdminId  String?
+  superAdmin    SuperAdmin? @relation(fields: [superAdminId], references: [id])
+  action        String   // LOGIN | CREATE_LICENSE | REVOKE_LICENSE | QUICK_LOGIN | SUSPEND_TENANT | ...
+  entity        String
+  entityId      String?
+  details       String?  // JSON
+  ipAddress     String?
+  createdAt     DateTime @default(now())
+
+  @@index([superAdminId])
+  @@index([createdAt])
+}
+
+// ============ IP مسدود‌شده (ضد هک) ============
+
+model BlockedIp {
+  id          String   @id @default(cuid())
+  ipAddress   String   @unique
+  reason      String   // RATE_LIMIT_EXCEEDED | BRUTE_FORCE | SUSPICIOUS_ACTIVITY | MANUAL
+  attempts    Int      @default(0)
+  blockedBy   String?  // super admin id یا سیستم
+  blockedAt   DateTime @default(now())
+  expiresAt   DateTime? // null = دائمی
+  isActive    Boolean  @default(true)
+
+  @@index([ipAddress])
+  @@index([isActive])
+}
+
+// ============ لاگ خطاهای سیستم ============
+
+model ErrorLog {
+  id          String   @id @default(cuid())
+  level       String   // ERROR | WARN | INFO
+  message     String
+  stack       String?
+  url         String?
+  method      String?
+  statusCode  Int?
+  userId      String?
+  tenantId    String?
+  ipAddress   String?
+  userAgent   String?
+  metadata    String?  // JSON
+  createdAt   DateTime @default(now())
+
+  @@index([level])
+  @@index([createdAt])
+  @@index([tenantId])
+  // composite برای داشبورد لاگ‌ها (فیلتر سطح + بازه‌ی زمانی)
+  @@index([level, createdAt])
+  @@index([tenantId, level, createdAt])
+  @@index([statusCode, createdAt])
+}
+
+// ============ IP Whitelist برای سوپرادمین ============
+
+model IpWhitelist {
+  id          String   @id @default(cuid())
+  ipAddress   String   @unique
+  label       String?  // توضیح (مثلاً "دفتر مرکزی")
+  addedBy     String?  // super admin id
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([ipAddress])
+}
+
+// ============ دانش‌نامه هوش مصنوعی (Knowledge Base) ============
+// سوپرادمین اسناد دانش (متن/URL/فایل PDF/TXT/CSV) به دستیار «هوش‌یار» تغذیه می‌کند
+// و دستیار هنگام پاسخ‌گویی از این اسناد به‌عنوان زمینه (RAG) استفاده می‌کند.
+model AiKnowledgeDoc {
+  id          String   @id @default(cuid())
+  title       String   // عنوان سند
+  sourceType  String   // text | url | file
+  sourceUrl   String?  // آدرس سایت (برای sourceType=url)
+  fileName    String?  // نام فایل آپلودی (برای sourceType=file)
+  mimeType    String?  // نوع فایل
+  content     String   // متن استخراج‌شده (متن خام یا متن PDF/صفحه وب)
+  charCount   Int      @default(0) // تعداد کاراکتر متن
+  status      String   @default("ACTIVE") // ACTIVE | INACTIVE
+  // آمار استفاده در پاسخ‌های دستیار
+  useCount    Int      @default(0)
+  lastUsedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status, createdAt])
+}
+
+// ============ بلاگ / CMS / سئو ============
+
+// ============ نظرات عمومی سایت (لندینگ) ============
+// کاربران از لندینگ نظر ثبت می‌کنند → سوپرادمین تایید می‌کند → در لندینگ + rich snippet نمایش
+model SiteTestimonial {
+  id          String   @id @default(cuid())
+  name        String   // نام نمایشی (مثلاً «مهندس رضایی»)
+  role        String?  // سمت (مدیرعامل، حسابدار رسمی، ...)
+  company     String?  // نام شرکت/فروشگاه
+  rating      Int      @default(5) // 1..5 ستاره
+  content     String   // متن نظر
+  status      String   @default("PENDING") // PENDING | APPROVED | REJECTED
+  // اطلاعات ثبت‌کننده (برای پیگیری تخلف — نمایش داده نمی‌شود)
+  userEmail   String?
+  userTenant  String?
+  submitIp    String?
+  // سئو: نمایش در schema.org
+  featured    Boolean  @default(false) // نظرهای شاخص در بالا
+  reply       String?  // پاسخ تیم هوش‌حساب
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  reviewedAt  DateTime? // زمان تایید/رد
+  reviewedBy  String?  // super admin id
+
+  @@index([status, featured, createdAt])
+  @@index([status, createdAt])
+}
+
+model BlogPost {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  title         String
+  excerpt       String?
+  content       String   // HTML or Markdown
+  coverImage    String?
+  category      String   // ACCOUNTING | TAX | PAYROLL | TUTORIAL | NEWS | MODIAN
+  tags          String?  // JSON array
+  status        String   @default("DRAFT") // DRAFT | PUBLISHED | ARCHIVED
+  publishedAt   DateTime?
+  readingTime   Int      @default(5) // دقیقه
+
+  // BLOG-SCHEDULER (v19): زمان‌بندی انتشار خودکار — هر N روز یک پیشنویس
+  scheduledPublishAt DateTime?
+  /** ترتیب انتشار در صف زمانبندی (کوچکتر = زودتر) */
+  scheduleOrder  Int?
+
+  // سئو
+  metaTitle       String?
+  metaDescription String?
+  focusKeyword    String?
+  ogImage         String?
+  canonicalUrl    String?  // URL کانونیکال (در صورت تکراری بودن محتوا یا سیندیکیشن)
+
+  authorId     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  @@index([status, publishedAt])
+  @@index([category])
+  @@index([slug])
+}
+
+// ============ صفحات CMS (صفحات استاتیک قابل ویرایش) ============
+model CmsPage {
+  id              String   @id @default(cuid())
+  slug            String   @unique // about, privacy, terms, contact-us, ...
+  title           String
+  content         String   // HTML rich content
+  excerpt         String?
+  metaTitle       String?
+  metaDescription String?
+  focusKeyword    String?
+  tags            String?  // JSON array (comma-separated)
+  category        String?  // landing | legal | info | marketing
+  status          String   @default("DRAFT") // DRAFT | PUBLISHED | ARCHIVED
+  featuredImage   String?
+  authorId        String?
+  publishedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  versions        CmsPageVersion[] @relation("CmsPageVersions")
+
+  @@index([slug])
+  @@index([status])
+  @@index([category])
+}
+
+// ============ نسخه‌های صفحات CMS (Page Versioning) ============
+// هر بار که یک صفحه‌ی CMS یا بلاگ به‌روزرسانی می‌شود، یک snapshot از
+// محتوای قبلی در این جدول ذخیره می‌شود. این امکان rollback به نسخه‌های
+// قبلی را به سوپرادمین می‌دهد.
+model CmsPageVersion {
+  id          String   @id @default(cuid())
+  pageId      String   // شناسه‌ی CmsPage یا BlogPost
+  pageType    String   // CMS | BLOG
+  page        CmsPage? @relation("CmsPageVersions", fields: [pageId], references: [id], onDelete: Cascade)
+  title       String
+  slug        String
+  content     String   // HTML snapshot
+  excerpt     String?
+  metaTitle   String?
+  metaDescription String?
+  focusKeyword String?
+  tags        String?
+  authorId    String?  // super admin id
+  authorName  String?
+  versionNote String?  // توضیح اختیاری
+  createdAt   DateTime @default(now())
+
+  @@index([pageId, pageType, createdAt])
+  @@index([pageType, createdAt])
+}
+
+model EcosystemConnection {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  service     String   // NOBATIME | CATALOG | HESABYAR
+  connectedAt DateTime?
+  status      String   @default("PENDING") // PENDING | CONNECTED | ERROR
+  ssoToken    String?  // توکن SSO
+  externalId  String?  // شناسه در سرویس مقصد
+  config      String?  // JSON
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([tenantId, service])
+  @@index([tenantId])
+}
+
+model SeoMeta {
+  id              String   @id @default(cuid())
+  page            String   @unique // /, /pricing, /blog, etc.
+  title           String?
+  description     String?
+  keywords        String?  // comma separated
+  ogTitle         String?
+  ogDescription   String?
+  ogImage         String?
+  canonical       String?
+  robots          String   @default("index, follow")
+  structuredData  String?  // JSON-LD
+  updatedAt       DateTime @updatedAt
+}
+
+// ============ PROD-V4: Multi-Currency & Exchange Rates ============
+
+model Currency {
+  id        String   @id @default(cuid())
+  code      String   @unique // USD, EUR, AED, etc.
+  name      String   // دلار آمریکا
+  symbol    String   // $
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model ExchangeRate {
+  id          String   @id @default(cuid())
+  fromCurrency String  // USD
+  toCurrency   String  // IRR
+  rate        Float    // 65000
+  source      String   @default("manual") // manual | API
+  fetchedAt   DateTime @default(now())
+
+  @@unique([fromCurrency, toCurrency])
+  @@index([fromCurrency, toCurrency])
+  // کوئری «آخرین نرخ‌ها» تمام رکوردها را بر اساس fetchedAt مرتب می‌کند
+  @@index([fetchedAt])
+}
+
+// ============ MARKET-SYNC: تنظیمات همگام‌سازی قیمت با نرخ بازار ============
+// هر tenant حداکثر یک رکورد دارد (unique tenantId). وقتی enabled=true و نرخِ لنگر
+// (مثلاً USD یا GOLD_GERAM18) تغییر کند، قیمت کالاهای ردیابی‌شده به نسبت تغییر
+// نرخ (currentRate / baseRate) به‌روزرسانی می‌شوند.
+model MarketPriceSync {
+  id              String    @id @default(cuid())
+  tenantId        String    @unique
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  enabled         Boolean   @default(false)
+  mode            String    @default("ALL") // ALL | SELECTED
+  anchorCode      String    @default("USD") // کد لنگر نرخ (USD | GOLD_GERAM18 | ...)
+  anchorLabel     String?   // برچسب فارسی لنگر (دلار آمریکا، طلا ۱۸ عیار...)
+  baseRate        Float     // نرخ لنگر در لحظه فعال‌سازی
+  lastSyncedAt    DateTime? // آخرین همگام‌سازی (دستی یا خودکار)
+  lastUpdatedCount Int      @default(0) // تعداد کالاهای به‌روزشده در آخرین همگام‌سازی
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// ============ PROD-V4: Budget Planning ============
+
+model Budget {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  title       String   // بودجه ۱۴۰۳
+  fiscalYear  String   // 1403
+  period      String   // monthly | quarterly | yearly
+  totalAmount BigInt   @default(0)
+  categories  String   // JSON: [{ category, amount }]
+  status      String   @default("ACTIVE") // ACTIVE | CLOSED
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items BudgetItem[]
+
+  @@index([tenantId])
+}
+
+model BudgetItem {
+  id           String  @id @default(cuid())
+  budgetId     String
+  budget       Budget  @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  category     String  // فروش، خرید، حقوق، اجاره، بازاریابی
+  period       String  // Q1, Q2, Q3, Q4 or month 1-12
+  budgetAmount BigInt  @default(0)
+  actualAmount BigInt  @default(0)
+  variance     BigInt  @default(0)
+
+  @@index([budgetId])
+}
+
+// ============ PROD-V4: Email/SMS Templates ============
+
+model EmailTemplate {
+  id        String   @id @default(cuid())
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
+  name      String   // فاکتور جدید
+  type      String   // INVOICE_CREATED | PAYMENT_RECEIVED | CHECK_DUE | WELCOME | TRIAL_ENDING
+  subject   String
+  body      String   // HTML with {{variables}}
+  variables String   // JSON: ["customerName", "invoiceNumber", "amount"]
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, type])
+}
+
+// ============ PROD-V4: Workflow Automation ============
+
+model Workflow {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String   // هشدار سررسید چک
+  trigger     String   // INVOICE_OVERDUE | CHECK_DUE | LOW_STOCK | PAYMENT_RECEIVED | DAILY
+  conditions  String   // JSON: [{ field, operator, value }]
+  actions     String   // JSON: [{ type: "email"|"sms"|"notification", template, recipient }]
+  isActive    Boolean  @default(true)
+  lastFired   DateTime?
+  firedCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+// ============ PROD-V5: Advanced Search Saved Searches ============
+
+model SavedSearch {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String
+  name      String
+  query     String
+  entity    String   // invoices | products | parties | journal | all
+  filters   String   // JSON
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, userId])
+}
+
+// ============ PROD-V5: Tags System ============
+
+model Tag {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  color     String   @default("primary") // primary | success | warning | destructive | info
+  createdAt DateTime @default(now())
+
+  entityTags EntityTag[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model EntityTag {
+  id         String @id @default(cuid())
+  tagId      String
+  tag        Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  entityType String // INVOICE | PRODUCT | PARTY | JOURNAL
+  entityId   String
+
+  @@unique([tagId, entityType, entityId])
+  @@index([entityType, entityId])
+}
+
+// ============ PROD-V5: Document Versioning ============
+
+model DocumentVersion {
+  id                String   @id @default(cuid())
+  tenantId          String
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  entityType        String   // INVOICE | JOURNAL_ENTRY
+  entityId          String
+  version           Int      // 1, 2, 3...
+  snapshot          String   // JSON: full document state
+  changedBy         String?  // userId
+  changedAt         DateTime @default(now())
+  changeDescription String?
+
+  @@index([entityType, entityId])
+  @@index([tenantId])
+}
+
+// ============ PROD-V5: Document Templates ============
+
+model DocumentTemplate {
+  id          String   @id @default(cuid())
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
+  name        String   // قالب فاکتور فروش
+  type        String   // INVOICE_SALE | INVOICE_PURCHASE | RECEIPT | QUOTE | CUSTOM
+  content     String   // HTML template with {{variables}}
+  header      String?  // optional header HTML
+  footer      String?  // optional footer HTML
+  paperSize   String   @default("A4") // A4 | Letter
+  orientation String   @default("portrait") // portrait | landscape
+  isActive    Boolean  @default(true)
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId, type])
+}
+
+// ============ INFRA-SEC-ANALYTICS: Feature Flags ============
+// پرچم‌های ویژگی (Feature Flags) برای فعال/غیرفعال‌سازی تدریجی قابلیت‌ها
+// rolloutPercentage — درصد کاربرانی که فلگ برایشان فعال است (۰ تا ۱۰۰)
+// conditions — JSON: قوانین اضافی (مثلاً فقط پلن business یا فقط کاربران خاص)
+// updatedAt + updatedBy برای audit
+
+model FeatureFlag {
+  id                String   @id @default(cuid())
+  name              String   @unique // نام منطقی فلگ: ai-assistant, modian-v2, ...
+  description       String?
+  enabled           Boolean  @default(false)
+  rolloutPercentage Int      @default(0) // 0..100
+  conditions        String?  // JSON: { plan?: string[], roles?: string[], tenantIds?: string[] }
+  updatedBy         String?  // سوپرادمین یا کاربری که آخرین تغییر را داده
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([enabled])
+}
+
+// ============ INFRA-SEC-ANALYTICS: Churn Prediction Signals ============
+// سیگنال‌های رفتاری کاربر که برای پیش‌بینی ریزش (Churn) استفاده می‌شوند
+// هر رکورد = یک سیگنال برای یک کاربر در یک روز
+
+model ChurnSignal {
+  id              String   @id @default(cuid())
+  userId          String
+  tenantId        String
+  signalDate      DateTime // تاریخ سیگنال (روزانه)
+  lastLoginDays   Int      @default(0) // روزهای گذشته از آخرین ورود
+  sessionCount    Int      @default(0) // تعداد نشست امروز
+  featureCount    Int      @default(0) // تعداد ماژول‌های متفاوت استفاده‌شده امروز
+  errorCount      Int      @default(0) // تعداد خطاهای رخ‌داده برای این کاربر امروز
+  invoiceCount    Int      @default(0) // تعداد فاکتورهای صادرشده امروز
+  riskScore       Float    @default(0) // امتیاز ریسک ۰ تا ۱ (محاسبه‌شده)
+  factors         String?  // JSON: فاکتورهای مشارکت‌کننده
+  createdAt       DateTime @default(now())
+
+  @@index([userId, signalDate])
+  @@index([tenantId])
+  @@index([riskScore])
+}
+
+// ============ UX-ECO-V2: Ecosystem Webhook Subscriptions ============
+// اشتراک‌های webhook برای ارسال رویدادهای هوش‌حساب به سرویس‌های اکوسیستم
+// (Nobatime، Catalog، HesabYar). هر سرویس می‌تواند برای چند رویداد ثبت شود.
+
+model EcosystemWebhook {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  service     String   // NOBATIME | CATALOG | HESABYAR
+  event       String   // invoice_created | payment_received | product_updated | party_created
+  url         String
+  secret      String?
+  isActive    Boolean  @default(true)
+  lastFired   DateTime?
+  lastStatus  String?  // success | failed | pending
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, service, event, url])
+  @@index([tenantId, service])
+  @@index([event])
+}
+
+// ============ UX-ECO-V2: Push Subscriptions (Marketing) ============
+// اشتراک‌های Push Notification کاربران برای ارسال نوتیفیکیشن وب
+// (Web Push API با VAPID). هر کاربر می‌تواند چند دستگاه داشته باشد.
+
+model PushSubscription {
+  id          String   @id @default(cuid())
+  userId      String
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  endpoint    String
+  p256dhKey   String
+  authKey     String
+  userAgent   String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, endpoint])
+  @@index([userId])
+  @@index([tenantId])
+}
+
+// ============ Push A/B Testing (Task 12-a) ============
+// آزمایش A/B پیام‌های پوش: هر تست دو نسخه متن (A/B) دارد و اشتراک‌ها به‌صورت
+// قطعی (hash اندپوینت) بین دو گروه تقسیم می‌شوند. کلیک‌ها از طریق endpoint
+// ریدایرکت /api/platform/push-ab/track رصد و در clicksA/clicksB ثبت می‌شوند.
+
+model PushABTest {
+  id           String    @id @default(cuid())
+  name         String
+  title        String
+  bodyA        String
+  bodyB        String
+  urlA         String?
+  urlB         String?
+  status       String    @default("RUNNING") // RUNNING | PAUSED | COMPLETED
+  splitPercent Int       @default(50) // درصد گروه A (0..100)
+  sentA        Int       @default(0)
+  sentB        Int       @default(0)
+  clicksA      Int       @default(0)
+  clicksB      Int       @default(0)
+  createdAt    DateTime  @default(now())
+  completedAt  DateTime?
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ============ Scheduled Push Recurrence (Task 12-a) ============
+// پوش‌های تکرارشونده (روزانه/هفتگی) — cron در /api/cron/push-schedules هر
+// زمان‌بندیِ سررسیده را با sendPushBroadcast ارسال می‌کند.
+// dayOfWeek: 0=یکشنبه … 6=شنبه (مطابق Date.getDay جاوااسکریپت)
+
+model PushSchedule {
+  id          String    @id @default(cuid())
+  title       String
+  body        String
+  url         String?
+  recurrence  String    @default("DAILY") // DAILY | WEEKLY
+  dayOfWeek   Int? // فقط برای WEEKLY (0..6)
+  hourOfDay   Int       @default(9) // ساعت ارسال (زمان سرور، 0..23)
+  active      Boolean   @default(true)
+  lastSentAt  DateTime?
+  sentCount   Int       @default(0) // تعداد دفعات اجرای موفق
+  createdAt   DateTime  @default(now())
+
+  @@index([active])
+  @@index([recurrence])
+}
+
+// ============ PROD-V8: Email Queue with Retry & Tracking ============
+// صف ارسال ایمیل با retry، attempts tracking و timed scheduling
+// status: PENDING | SENT | FAILED | RETRYING
+// processEmailQueue تا ۵۰ ایمیل PENDING یا RETRYING را ارسال می‌کند
+
+model EmailQueue {
+  id          String    @id @default(cuid())
+  tenantId    String?
+  to          String
+  subject     String
+  html        String
+  status      String    @default("PENDING") // PENDING | SENT | FAILED | RETRYING
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(3)
+  lastError   String?
+  sentAt      DateTime?
+  scheduledAt DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+
+  @@index([status, scheduledAt])
+  @@index([tenantId])
+}
+
+// ============ PROD-V8: SMS Templates ============
+// قالب‌های پیامک با {{variables}} و پشتیبانی از segment count
+
+model SmsTemplate {
+  id        String   @id @default(cuid())
+  tenantId  String?
+  name      String
+  type      String   // VERIFICATION | REMINDER | DISCOUNT | WELCOME | CHECK_DUE | INVOICE_PAID
+  body      String   // با {{variables}}
+  variables String   // JSON: ["customerName", "amount", ...]
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, type])
+}
+
+// ============ PROD-V8: Document Collaboration ============
+// قفل سند برای جلوگیری از ویرایش همزمان (5 دقیقه expiry)
+// تاریخچه ویرایش‌ها برای audit trail
+
+model DocumentLock {
+  id          String   @id @default(cuid())
+  tenantId    String
+  entityType  String
+  entityId    String
+  userId      String
+  lockedAt    DateTime @default(now())
+  expiresAt   DateTime
+
+  @@unique([entityType, entityId])
+  @@index([tenantId])
+}
+
+model DocumentEdit {
+  id          String   @id @default(cuid())
+  tenantId    String
+  entityType  String
+  entityId    String
+  userId      String
+  field       String
+  oldValue    String?
+  newValue    String?
+  createdAt   DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([tenantId])
+}
+
+// ============ INFRA-ECO-MKT-SEC: Email Sequences (Drip Campaigns) ============
+// دنباله‌های ایمیل بازاریابی — مجموعه‌ای از ایمیل‌ها با تأخیر مشخص
+// که پس از یک trigger (SIGNUP, TRIAL_START, ...) برای کاربر ارسال می‌شوند.
+// steps: JSON array of { delay (hours), templateId, subject?, body? }
+
+model EmailSequence {
+  id        String   @id @default(cuid())
+  name      String
+  trigger   String   // SIGNUP | TRIAL_START | TRIAL_ENDING | INACTIVE_7D | MANUAL
+  steps     String   // JSON: [{ delayHours, subject, body }]
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  enrollments EmailSequenceEnrollment[]
+
+  @@index([trigger, isActive])
+}
+
+// ثبت‌نام یک کاربر در یک دنباله — برای پیگیری وضعیت ارسال ایمیل‌ها
+model EmailSequenceEnrollment {
+  id         String   @id @default(cuid())
+  sequenceId String
+  sequence   EmailSequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId     String
+  userEmail  String
+  status     String   @default("ACTIVE") // ACTIVE | COMPLETED | CANCELLED
+  currentStep Int     @default(0)
+  nextSendAt DateTime?
+  startedAt  DateTime @default(now())
+  completedAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([sequenceId])
+  @@index([userId])
+  @@index([status, nextSendAt])
+  @@index([tenantId])
+}
+
+// ============ INFRA-ECO-MKT-SEC: Referral Program ============
+// برنامه معرفی دوستان — هر کاربر کد معرفی دارد و با دعوت دوستان پاداش می‌گیرد.
+// referrerId = userId کاربر دعوت‌کننده
+// status: PENDING (دعوت ارسال شد) | SIGNED_UP (کاربر ثبت‌نام کرد) | REWARDED (پاداش داده شد)
+
+model Referral {
+  id           String   @id @default(cuid())
+  referrerId   String
+  refereeEmail String
+  // FIX(v12.1.2 — رفرال): code «کد شخصی دعوت‌کننده» است نه شناسه یکتای رکورد —
+  // قبلاً @unique بود یعنی هر کد فقط یک دعوت یک‌بارمصرف با ایمیل ازپیش‌تعیین‌شده
+  // پوشش می‌داد و ثبت‌نام دوست دیگر از لینک عمومی ?ref=CODE (ایمیل جدید) track
+  // نمی‌شد (EMAIL_MISMATCH/ALREADY_TRACKED). حالا یک کد → چند رکورد دعوت.
+  code         String
+  status       String   @default("PENDING") // PENDING | SIGNED_UP | REWARDED
+  reward       Float    @default(0)
+  refereeUserId String? // پس از ثبت‌نام کاربر دعوت‌شده
+  // Task 23-A — پاداش دوطرفه: روزهای اعطایی به «دعوت‌شده» (تمدید تریال)
+  // 0 = هنوز اعطا نشده؛ 14 = حالت استاندارد (تریال ۱۴→۲۸ روز)
+  refereeBonusDays Int @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([referrerId])
+  @@index([refereeEmail])
+  @@index([status])
+  @@index([code])
+}
+
+// ============ PROD-V7: Price Alerts ============
+// هشدارهای قیمتی برای طلا/ارز — وقتی قیمت از آستانه‌ی درصدی عبور کند، اعلان تولید می‌شود.
+
+// ============ v12.1: گزارش باگ کاربران (Bug Bounty داخلی) ============
+// کاربران باگ را با اسکرین‌شات گزارش می‌کنند؛ سوپرادمین بررسی می‌کند و در صورت
+// تأیید، اشتراک یک‌ماهه پلن حرفه‌ای به‌عنوان پاداش فعال می‌شود.
+
+model BugReport {
+  id          String   @id @default(cuid())
+  tenantId    String
+  userId      String
+  title       String
+  description String
+  module      String?  // ماژول/صفحه‌ای که باگ در آن دیده شد
+  severity    String   @default("medium") // low | medium | high | critical
+ // FIX(SA-4): شدت تأییدشده توسط سوپرادمین — مستقل از severity خودگزارش‌شده‌ی کاربر.
+ // پاداش خودکار بر مبنای همین فیلد محاسبه می‌شود (نه شدت خودگزارش‌شده).
+ verifiedSeverity String? // low | medium | high | critical — تنها سوپرادمین تنظیم می‌کند
+  // مسیر فایل اسکرین‌شات در private-uploads (سرو با URL امضاشده)
+  screenshot  String?
+  status      String   @default("OPEN") // OPEN | IN_REVIEW | APPROVED | REJECTED | FIXED
+  // پاسخ/دلیل سوپرادمین هنگام تأیید/رد
+  adminNote   String?
+  reviewedBy  String?  // SuperAdmin id
+  reviewedAt  DateTime?
+  // پاداش: اشتراک یک‌ماهه حرفه‌ای وقتی APPROVED شود
+  rewardGranted Boolean @default(false)
+  rewardLicenseId String? // شناسه لایسنس پاداش
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ═══════════════ Task 24 — کیف پول و برداشت (درخواست مالک) ═══════════════
+// پاداش‌های نقدی (تومان): دعوت دوست (۱,۰۰۰,۰۰۰ ت — پس از خرید اشتراک دوست)
+// + گزارش باگ (۲۵۰,۰۰۰ تا ۱,۰۰۰,۰۰۰ ت — پس از تأیید پشتیبانی).
+// برداشت: کاربر شماره کارت/شبا وارد می‌کند → سوپرادمین بررسی و کارت‌به‌کارت/شبا می‌کند.
+model WalletTransaction {
+  id          String   @id @default(cuid())
+  tenantId    String   // صاحب کیف پول = شرکت
+  userId      String?  // کاربری که پاداش را گرفت (برای audit)
+  // REFERRAL_BONUS | BUG_REWARD | WITHDRAWAL | ADMIN_ADJUSTMENT | SIGNUP_GIFT
+  type        String
+  amountToman Int      // علامت‌دار: + شارژ / − برداشت
+  balanceAfter Int     //Snapshot موجودی بعد از تراکنش (حسابرسی)
+  status      String   @default("COMPLETED") // COMPLETED | PENDING | CANCELED
+  description String?
+  meta        String?  // JSON: { referralId, bugReportId, withdrawalId, plan, ... }
+  createdAt   DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([type])
+  @@index([userId])
+}
+
+// درخواست برداشت وجه — بررسی دستی سوپرادمین (کارت‌به‌کارت یا شبا)
+model WithdrawalRequest {
+  id           String    @id @default(cuid())
+  tenantId     String
+  userId       String
+  amountToman  Int       // مثبت — مبلغ درخواستی (ناخالص)
+  taxToman     Int       @default(0) // مالیات برداشت (۱۰٪ مبلغ ناخالص)
+  netToman     Int       @default(0) // مبلغ خالص قابل واریز (ناخالص − مالیات)
+  cardNumber   String?   // AES-256-GCM رمزنگاری‌شده (۱۶ رقم)
+  shebaNumber  String?   // AES-256-GCM رمزنگاری‌شده (IR + 24 رقم)
+  holderName   String    // نام صاحب حساب
+  status       String    @default("PENDING") // PENDING | APPROVED | PAID | REJECTED
+  adminNote    String?   // پاسخ سوپرادمین (دلیل رد و...)
+  reviewedBy   String?   // SuperAdmin id
+  reviewedAt   DateTime?
+  paidAt       DateTime? // زمان واریز واقعی
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+  @@index([status, createdAt])
+  @@index([userId])
+}
+
+model PriceAlert {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  item        String   // gold:GERAM18 | currency:USD | gold:SEKEE | ...
+  threshold   Float    // درصد تغییر قابل‌قبول
+  direction   String   // up | down | both
+  isActive    Boolean  @default(true)
+  lastChecked DateTime?
+  lastPrice   Float?
+  triggeredAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId, isActive])
+}
+
+// ============ PROD-V7: Forecast Accuracy Tracking ============
+// ثبت پیش‌بینی‌های قبلی و مقادیر واقعی آن‌ها برای محاسبه‌ی دقت (MAPE) و جهت‌سنجی.
+
+model ForecastRecord {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  metric        String   // revenue | expenses | cash | profit
+  forecastDate  DateTime
+  targetDate    DateTime
+  forecastValue Float
+  actualValue   Float?
+  accuracy      Float?   // درصد خطا (absolute percentage error)
+  method        String
+  createdAt     DateTime @default(now())
+
+  @@index([tenantId, metric])
+  @@index([targetDate])
+}
+
+// ============ ECO-MKT-V2: Loyalty Points System ============
+// سیستم امتیاز وفاداری — کاربران با فعالیت‌های خود امتیاز کسب می‌کنند.
+// reason: INVOICE_CREATED | DAILY_LOGIN | REFERRAL | PROFILE_COMPLETE | etc.
+// امتیازها در یک جدول append-only ثبت می‌شوند تا تاریخچه کامل فعالیت حفظ شود.
+
+model LoyaltyPoint {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String
+  points    Int      // مثبت = کسب، منفی = مصرف
+  reason    String   // INVOICE_CREATED | DAILY_LOGIN | REFERRAL | REDEEM | BONUS | MANUAL
+  referenceId String? // شناسه رکورد مرتبط (مثلاً invoiceId)
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, userId])
+  @@index([userId])
+  @@index([reason])
+}
+
+// ============ ECO-MKT-V2: In-App Messages ============
+// پیام‌های درون‌برنامه‌ای — بنر یا مودال که به کاربران هدف نمایش داده می‌شود.
+// targetRole: نقش هدف (ADMIN | ACCOUNTANT | all)
+// targetSegment: بخش هدف (trial | paid | inactive)
+// type: INFO | WARNING | PROMO | FEATURE
+
+model InAppMessage {
+  id            String   @id @default(cuid())
+  title         String
+  body          String
+  type          String   @default("INFO") // INFO | WARNING | PROMO | FEATURE
+  targetRole    String?  // ADMIN | ACCOUNTANT | MANAGER | USER | all
+  targetSegment String?  // trial | paid | inactive
+  actionLabel   String?
+  actionUrl     String?
+  dismissible   Boolean  @default(true)
+  isActive      Boolean  @default(true)
+  startsAt      DateTime?
+  endsAt        DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([isActive, startsAt, endsAt])
+  @@index([targetRole])
+  @@index([targetSegment])
+}
+
+// ============ PROD-V9: Email A/B Testing ============
+// تست A/B قالب‌های ایمیل — مقایسه‌ی دو قالب برای یافتن بهترین نسخه.
+// splitRatio: درصد تقسیم ارسال‌ها بین قالب A و B (۰.۵ = ۵۰/۵۰)
+// sentA/sentB: تعداد ارسال‌های هر نسخه
+// openRateA/openRateB: نرخ باز شدن (۰ تا ۱) — با tracking pixel به‌روزرسانی می‌شود
+// status: ACTIVE | PAUSED | COMPLETED
+
+model EmailABTest {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  templateAId String
+  templateBId String
+  audience    String   @default("all") // all | trial | paid
+  splitRatio  Float    @default(0.5)
+  sentA       Int      @default(0)
+  sentB       Int      @default(0)
+  openRateA   Float?
+  openRateB   Float?
+  status      String   @default("ACTIVE")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status])
+  @@index([tenantId])
+}
+
+// ============ INFRA-ECO-MKT-V3: Event Sourcing ============
+// رویدادهای دامنه (append-only) برای الگوی Event Sourcing.
+// aggregateType: Invoice | Product | Party | ...
+// eventType: CREATED | UPDATED | DELETED | ...
+// version: نسخه‌ی aggregate بعد از این رویداد (بر optimistic concurrency)
+
+model DomainEvent {
+  id             String   @id @default(cuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  aggregateType  String   // Invoice | Product | Party | ...
+  aggregateId    String
+  eventType      String   // CREATED | UPDATED | DELETED | ...
+  data           String   // JSON snapshot of event payload
+  metadata       String   // JSON: { userId, ipAddress, source, ... }
+  version        Int      @default(1)
+  createdAt      DateTime @default(now())
+
+  @@index([tenantId, aggregateType, aggregateId])
+  @@index([aggregateType, aggregateId])
+  @@index([tenantId, createdAt])
+}
+
+// ============ INFRA-ECO-MKT-V3: NPS Survey ============
+// نظرسنجی NPS (Net Promoter Score) — ۰ تا ۱۰
+// category: promoter (9-10) | passive (7-8) | detractor (0-6)
+
+model NPSSurvey {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String
+  score     Int      // 0-10
+  feedback  String?
+  category  String?  // promoter | passive | detractor
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([category])
+  @@index([createdAt])
+}
+
+
+
+// ============ SEC-ANALYTICS-V3: SIEM Security Events ============
+// رویدادهای امنیتی برای SIEM — ورود، خطا، دسترسی غیرمجاز، فعالیت مشکوک.
+// type: LOGIN_SUCCESS | LOGIN_FAILED | PERMISSION_DENIED | SUSPICIOUS_ACTIVITY |
+//       EXPORT_DATA | API_KEY_USED | CONFIG_CHANGE | 2FA_VERIFY | etc.
+// severity: info | warning | critical
+
+model SecurityEvent {
+  id          String   @id @default(cuid())
+  timestamp   DateTime @default(now())
+  type        String
+  userId      String?
+  tenantId    String?
+  ip          String
+  userAgent   String?
+  details     String   // JSON
+  severity    String   @default("info") // info | warning | critical
+  createdAt   DateTime @default(now())
+
+  @@index([type, timestamp])
+  @@index([severity, timestamp])
+  @@index([userId])
+  @@index([ip])
+  @@index([tenantId])
+}
+
+// ============ SEC-ANALYTICS-V3: Insider Threat Detection ============
+// ذخیره‌ی تهدیدات داخلی شناسایی‌شده (برای گزارش‌گیری و روند)
+model InsiderThreatRecord {
+  id              String   @id @default(cuid())
+  userId          String
+  tenantId        String
+  riskScore       Float    // 0..100
+  indicators      String   // JSON: ["off_hours_access", "bulk_export", ...]
+  recommendedAction String
+  lastActivity    DateTime
+  detectedAt      DateTime @default(now())
+
+  @@index([userId])
+  @@index([tenantId, detectedAt])
+  @@index([riskScore])
+}
+
+// ============ SEC-ANALYTICS-V3: Threat Hunting Reports ============
+// کش گزارش‌های threat hunting برای مقایسه‌ی روند
+model ThreatHuntReport {
+  id              String   @id @default(cuid())
+  type            String   // BRUTE_FORCE | CREDENTIAL_STUFFING | DATA_EXFILTRATION | ...
+  severity        String   // low | medium | high | critical
+  description     String
+  affectedUsers   String   // JSON: string[]
+  recommendedAction String
+  evidence        String   // JSON
+  detectedAt      DateTime @default(now())
+
+  @@index([type, detectedAt])
+  @@index([severity])
+}
+
+// ============ SEC-ANALYTICS-V3: Predictive Maintenance ============
+model MaintenanceAlertRecord {
+  id              String   @id @default(cuid())
+  component       String
+  issue           String
+  probability     Float
+  estimatedTime   String
+  recommendedAction String
+  severity        String   // low | medium | high
+  resolvedAt      DateTime?
+  detectedAt      DateTime @default(now())
+
+  @@index([component, detectedAt])
+  @@index([severity])
+}
+
+// ============ SEC-ANALYTICS-V3: ETL Jobs ============
+model ETLJobRecord {
+  id           String    @id @default(cuid())
+  name         String    @unique
+  source       String
+  destination  String
+  schedule     String    // cron
+  lastRun      DateTime?
+  lastStatus   String    @default("idle") // idle | running | success | failed
+  lastError    String?
+  lastDurationMs Int?
+  recordsProcessed Int?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([lastStatus])
+}
+
+// ============ SEC-ANALYTICS-V3: Custom Reports ============
+// گزارش‌های ذخیره‌شده‌ی کاربر در custom-report-builder
+model CustomReport {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId      String
+  name        String
+  dataSource  String   // invoices | products | parties | journal | checks | ...
+  fields      String   // JSON: string[]
+  groupBy     String?  // JSON: string[]
+  aggregations String? // JSON: [{ field, func }]
+  filters     String?  // JSON: conditions
+  chartType   String   @default("table") // table | bar | line | pie | area
+  schedule    String?  // daily | weekly | monthly | null
+  scheduleEmail String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([userId])
+}
+
+// ============ SEC-ANALYTICS-V3: Security Training ============
+// پیشرفت کاربر در آموزش‌های امنیتی
+model SecurityTrainingProgress {
+  id           String   @id @default(cuid())
+  userId       String
+  tenantId     String
+  lessonId     String   // password-security | phishing | 2fa | data-protection
+  status       String   @default("not_started") // not_started | in_progress | completed
+  score        Int      @default(0) // درصد
+  attempts     Int      @default(0)
+  completedAt  DateTime?
+  certificateIssued Boolean @default(false)
+  certificateId String?
+  updatedAt    DateTime @updatedAt
+  createdAt    DateTime @default(now())
+
+  @@unique([userId, lessonId])
+  @@index([userId])
+  @@index([tenantId])
+}
+
+// ============ SEC-ANALYTICS-V3: Trust Context (Zero Trust) ============
+// ثبت دستگاه‌ها و موقعیت‌های شناخته‌شده برای محاسبه‌ی trust score
+model KnownDevice {
+  id            String   @id @default(cuid())
+  userId        String
+  tenantId      String
+  fingerprint   String
+  firstSeen     DateTime @default(now())
+  lastSeen      DateTime @default(now())
+  location      String?
+  userAgent     String?
+  trustCount    Int      @default(1) // تعداد دفعات ورود موفق
+  isTrusted     Boolean  @default(true)
+
+  @@unique([userId, fingerprint])
+  @@index([userId])
+  @@index([tenantId])
+}
+
+model KnownIp {
+  id         String   @id @default(cuid())
+  userId     String
+  tenantId   String
+  ipAddress  String
+  location   String?
+  firstSeen  DateTime @default(now())
+  lastSeen   DateTime @default(now())
+  loginCount Int      @default(1)
+  isTrusted  Boolean  @default(true)
+
+  @@unique([userId, ipAddress])
+  @@index([userId])
+}
+
+// ============ ANTI-FRAUD (v19): سد ضدتقلب ثبت‌نام ============
+// هر «دستگاه» (fingerprint) و هر «شماره موبایل» حداکثر ۲ بار می‌تواند
+// ثبت‌نام/تریال بسازد؛ بیشتر از آن باید پلن بخرد. شمارنده‌ها با کلید
+// یکتا (device:… / phone:… / ip:…) نگه داشته می‌شوند و سمت سرور
+// اعمال می‌شوند (client فقط سیگنال می‌فرستد).
+model RegistrationGuard {
+  id          String   @id @default(cuid())
+  /** کلید یکتا: "device:<fp>" | "phone:<normalized>" | "ip:<hash>" */
+  guardKey    String   @unique
+  /** نوع کلید */
+  guardType   String // device | phone | ip
+  /** تعداد ثبت‌نام‌های انجام‌شده با این کلید */
+  count       Int      @default(0)
+  /** آخرین IP ثبت‌نام (برای گزارش سوپرادمین) */
+  lastIp      String?
+  /** آخرین user-agent */
+  lastUserAgent String?
+  /** آیا مسدود شده؟ (سوپرادمین می‌تواند دستی مسدود/آزاد کند) */
+  blocked     Boolean  @default(false)
+  /** یادداشت سوپرادمین */
+  note        String?
+  firstSeen   DateTime @default(now())
+  lastSeen    DateTime @default(now())
+
+  @@index([guardType])
+  @@index([blocked])
+}
+
+// ============ SEC-ANALYTICS-V3: Warehouse Fact/Dimension ============
+// جداول انبار داده برای تحلیل‌های OLAP — star schema
+
+model DimTenant {
+  id          String   @id @default(cuid())
+  tenantKey   String   @unique
+  tenantId    String
+  name        String
+  plan        String
+  status      String
+  createdAt   DateTime
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+model DimParty {
+  id          String   @id @default(cuid())
+  partyKey    String   @unique
+  tenantId    String
+  partyId     String
+  name        String
+  type        String
+  city        String?
+  createdAt   DateTime
+
+  @@index([tenantId, partyId])
+}
+
+model DimProduct {
+  id           String   @id @default(cuid())
+  productKey   String   @unique
+  tenantId     String
+  productId    String
+  name         String
+  sku          String?
+  category     String?
+  unit         String?
+  createdAt    DateTime
+
+  @@index([tenantId, productId])
+}
+
+model DimUser {
+  id          String   @id @default(cuid())
+  userKey     String   @unique
+  userId      String
+  tenantId    String
+  name        String
+  email       String
+  role        String
+  createdAt   DateTime
+
+  @@index([userId])
+}
+
+model DimDate {
+  id          String   @id @default(cuid())
+  dateKey     String   @unique // YYYYMMDD
+  date        DateTime
+  jalaliYear  Int
+  jalaliMonth Int
+  jalaliDay   Int
+  quarter     Int
+  weekday     Int
+  isWeekend   Boolean
+
+  @@index([date])
+}
+
+model FactInvoice {
+  id           String   @id @default(cuid())
+  tenantKey    String
+  partyKey     String
+  userKey      String?
+  dateKey      String
+  invoiceId    String
+  invoiceNumber String
+  type         String   // SALE | PURCHASE | RETURN
+  status       String
+  subtotal     BigInt   @default(0)
+  discount     BigInt   @default(0)
+  tax          BigInt   @default(0)
+  total        BigInt   @default(0)
+  paidAmount   BigInt   @default(0)
+  itemCount    Int      @default(0)
+  currency     String   @default("IRR")
+  etlBatchId   String?
+  loadedAt     DateTime @default(now())
+
+  @@index([tenantKey, dateKey])
+  @@index([partyKey])
+  @@index([status])
+}
+
+model FactPayment {
+  id           String   @id @default(cuid())
+  tenantKey    String
+  partyKey     String
+  dateKey      String
+  invoiceId    String?
+  amount       BigInt   @default(0)
+  method       String
+  reference    String?
+  status       String
+  etlBatchId   String?
+  loadedAt     DateTime @default(now())
+
+  @@index([tenantKey, dateKey])
+  @@index([partyKey])
+}
+
+model FactTransaction {
+  id           String   @id @default(cuid())
+  tenantKey    String
+  partyKey     String?
+  userKey      String?
+  dateKey      String
+  journalId    String
+  entryNumber  String?
+  accountCode  String
+  debit        BigInt   @default(0)
+  credit       BigInt   @default(0)
+  etlBatchId   String?
+  loadedAt     DateTime @default(now())
+
+  @@index([tenantKey, dateKey])
+  @@index([accountCode])
+}
+
+model ETLBatch {
+  id           String   @id @default(cuid())
+  jobName      String
+  batchType    String   // FULL | INCREMENTAL
+  status       String   @default("running") // running | success | failed
+  startedAt    DateTime @default(now())
+  finishedAt   DateTime?
+  recordsRead  Int      @default(0)
+  recordsWritten Int    @default(0)
+  error        String?
+
+  @@index([jobName, startedAt])
+  @@index([status])
+}
+
+// ============ Marketing Campaign ============
+model Campaign {
+  id           String   @id @default(cuid())
+  tenantId     String
+  name         String
+  description  String?
+  status       String   @default("draft") // draft | active | paused | completed | archived
+  triggerType  String   // event | schedule | segment | threshold | inactivity | property_change
+  triggerConfig String  @default("{}") // JSON
+  actionsJson  String   @default("[]") // JSON array of actions
+  goalsJson    String   @default("[]") // JSON array of goals
+  abTestJson   String?  // JSON
+  startAt      DateTime?
+  endAt        DateTime?
+  enrolled     Int      @default(0)
+  completed    Int      @default(0)
+  converted    Int      @default(0)
+  budget       BigInt?
+  spent        BigInt   @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([tenantId, status])
+  @@index([status, startAt])
+}
+
+// ============ Tenant Rate Limit ============
+model TenantRateLimit {
+  id             String   @id @default(cuid())
+  tenantId       String
+  endpoint       String
+  limit          Int      @default(60)
+  windowSeconds  Int      @default(60)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([tenantId, endpoint])
+  @@index([tenantId])
+}
+
+// ============ Public API Key ============
+model PublicApiKey {
+  id          String    @id @default(cuid())
+  name        String
+  email       String
+  keyHash     String    @unique
+  scopes      String    @default("read")
+  status      String    @default("active") // active | revoked
+  lastUsedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  revokedAt   DateTime?
+
+  @@index([email])
+  @@index([status])
+}
+
+// ============ CRM Notes (یادداشت‌های سوپرادمین روی tenant) ============
+
+model CrmNote {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  content     String   // متن یادداشت
+  createdBy   String?  // شناسه‌ی سوپرادمین
+  creatorName String?  // نام کاربری سوپرادمین (денормalized برای نمایش سریع)
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([createdAt])
+}
+
+// ============ CRM قدرتمند — Kanban Pipeline Deals ============
+// فرصت‌های فروش در مراحل مختلف: پیش‌بینی، تماس گرفته‌شده، مذاکره، پیشنهاد، بسته‌شده، باخته
+
+model CrmDeal {
+  id                String   @id @default(cuid())
+  tenantId          String
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  partyId           String?
+  party             Party?   @relation(fields: [partyId], references: [id])
+  title             String   // عنوان فرصت
+  stage             String   @default("PROSPECT") // PROSPECT | CONTACTED | NEGOTIATION | PROPOSAL | CLOSED | LOST
+  value             BigInt   @default(0)  // ریال
+  currency          String   @default("IRR")
+  probability       Int      @default(0)  // 0-100 — احتمال موفقیت
+  expectedCloseDate DateTime?
+  description       String?
+  assignedTo        String?  // userId مسئول
+  createdById       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  activities CrmActivity[]
+
+  @@index([tenantId, stage])
+  @@index([tenantId, partyId])
+  @@index([tenantId, expectedCloseDate])
+}
+
+// ============ CRM قدرتمند — Activity Timeline ============
+// فعالیت‌های هر مشتری/فرصت: تماس، ایمیل، جلسه، یادداشت، تسک، بازدید
+
+model CrmActivity {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  partyId     String?
+  party       Party?   @relation(fields: [partyId], references: [id])
+  dealId      String?
+  deal        CrmDeal? @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  type        String   // CALL | EMAIL | MEETING | NOTE | TASK | VISIT
+  subject     String
+  description String?
+  duration    Int?     // مدت زمان به دقیقه
+  outcome     String?  // نتیجه فعالیت
+  createdBy   String?  // userId
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, partyId])
+  @@index([tenantId, dealId])
+  @@index([tenantId, createdAt])
+  @@index([tenantId, type])
+}
+
+// ============ PROD-V5: پورتال مشتریان (Customer Self-Service Portal) ============
+// لینک امنِ token-محور برای هر مشتری؛ بدون نیاز به ورود، با تاریخ انقضا.
+
+model CustomerPortalAccess {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  partyId     String
+  party       Party    @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  tokenHash   String   @unique // هش توکن؛ توکن خام فقط یک‌بار به کاربر نمایش داده می‌شود
+  expiresAt   DateTime?
+  isActive    Boolean  @default(true)
+  lastAccessAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  sessions    PortalSession[]
+
+  @@index([tenantId, partyId])
+  @@index([tenantId, isActive])
+}
+
+model PortalSession {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  accessId    String
+  access      CustomerPortalAccess @relation(fields: [accessId], references: [id], onDelete: Cascade)
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  @@index([accessId])
+  @@index([tenantId, createdAt])
+}
+
+// ============ PROD-V5: دارایی‌های ثابت و استهلاک ============
+// روش خط مستقیم (straight-line) مطابق استاندارد ایران.
+
+model FixedAsset {
+  id                     String   @id @default(cuid())
+  tenantId               String
+  tenant                 Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  code                   String   // کد دارایی: A-001
+  name                   String
+  category               String   // EQUIPMENT | VEHICLE | BUILDING | FURNITURE | IT | OTHER
+  purchaseDate           DateTime
+  purchaseCost           BigInt   @default(0) // بهای تمام شده خرید (ریال)
+  salvageValue           BigInt   @default(0) // ارزش اسقاط
+  usefulLifeYears        Int      @default(5)
+  depreciationMethod     String   @default("STRAIGHT_LINE") // STRAIGHT_LINE | DECLINING_BALANCE
+  accumulatedDepreciation BigInt  @default(0) // استهلاک انباشته (ریال)
+  currentValue           BigInt   @default(0) // ارزش دفتری فعلی
+  status                 String   @default("ACTIVE") // ACTIVE | DEPRECIATING | DISPOSED | SOLD
+  location               String?
+  custodian              String?
+  description            String?
+  lastDepreciationDate   DateTime?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  deletedAt              DateTime?
+
+  depreciationEntries    DepreciationEntry[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, status])
+  @@index([tenantId, category])
+}
+
+model DepreciationEntry {
+  id              String   @id @default(cuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assetId         String
+  asset           FixedAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  period          String   // YYYY-MM (میلادی) برای یکتایی هر ماه
+  amount          BigInt   @default(0)
+  accumulatedAfter BigInt  @default(0)
+  postedAt        DateTime @default(now())
+  journalEntryId  String?
+
+  @@unique([assetId, period])
+  @@index([tenantId, period])
+  @@index([assetId])
+}
+
+// ============ PROD-V5: مغایرت‌گیری بانکی ============
+
+model BankReconciliation {
+  id              String   @id @default(cuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  bankAccountId   String
+  bankAccount     BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+  period          String   // YYYY-MM
+  statementBalance BigInt  @default(0) // موجودی بانک به‌گفته‌ی صورت‌حساب
+  bookBalance     BigInt   @default(0) // موجودی دفتر
+  difference      BigInt   @default(0) // statement - book
+  status          String   @default("DRAFT") // DRAFT | IN_PROGRESS | COMPLETED | ARCHIVED
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  completedAt     DateTime?
+
+  lines           BankReconciliationLine[]
+
+  @@unique([tenantId, bankAccountId, period])
+  @@index([tenantId, status])
+  @@index([bankAccountId])
+}
+
+model BankReconciliationLine {
+  id                  String   @id @default(cuid())
+  reconciliationId    String
+  reconciliation      BankReconciliation @relation(fields: [reconciliationId], references: [id], onDelete: Cascade)
+  tenantId            String
+  date                DateTime
+  description         String
+  amount              BigInt   @default(0) // مثبت: واریز / منفی: برداشت
+  matchedEntityType   String?  // INVOICE | JOURNAL | CHECK | MANUAL
+  matchedEntityId     String?
+  status              String   @default("UNMATCHED") // MATCHED | UNMATCHED | IGNORED
+  createdAt           DateTime @default(now())
+
+  @@index([reconciliationId, status])
+  @@index([tenantId, date])
+}
+
+// ============ ثبت هزینه و مسافت (Expense & Mileage Tracker) ============
+
+model ExpenseEntry {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId      String?  // کاربر ثبت‌کننده
+  type        String   // MILEAGE | EXPENSE
+  amount      BigInt   @default(0) // مبلغ به ریال (برای MILEAGE: مسافت * نرخ)
+  distanceKm  Float?   // فقط برای MILEAGE
+  ratePerKm   Float?   // فقط برای MILEAGE — نرخ ریال/کیلومتر
+  date        DateTime @default(now())
+  category    String   // MEALS | TRAVEL | FUEL | OFFICE | CLIENT_MEETING | SOFTWARE | OTHER
+  vendor      String?  // فروشنده / ارائه‌دهنده
+  description String?
+  receiptUrl  String?  // URL پیوست تصویر رسید
+  status      String   @default("PENDING") // PENDING | APPROVED | REJECTED
+  approvedBy  String?
+  approvedAt  DateTime?
+  projectId   String?  // اتصال به پروژه (اختیاری)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId, status])
+  @@index([tenantId, type, date])
+  @@index([tenantId, category])
+  @@index([userId, date])
+}
+
+// ============ لاگ سیستم (System Log) ============
+model LogEntry {
+  id          String   @id @default(cuid())
+  timestamp   DateTime @default(now())
+  level       String   // DEBUG, INFO, WARN, ERROR, FATAL
+  category    String   // AUTH, API, INVOICE, MODIAN, PAYMENT, IMPORT, EXPORT, SYNC, SECURITY, PERFORMANCE, SYSTEM, USER_ACTION
+  message     String
+  tenantId    String?
+  userId      String?
+  metadata    String?  // JSON string
+  stackTrace  String?
+  requestId   String?
+  userAgent   String?
+  ip          String?
+  path        String?
+  duration    Int?     // ms
+
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
+  user        User?    @relation(fields: [userId], references: [id])
+
+  @@index([level])
+  @@index([category])
+  @@index([tenantId])
+  @@index([timestamp])
+  @@index([tenantId, timestamp])
+}
+
+// ============ سامانه مودیان — رویدادها و لاگ همگام‌سازی ============
+
+// رویدادهای دریافتی از Webhook مودیان (نسخه ۲)
+model ModianWebhookEvent {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  eventType   String   // invoice.accepted | invoice.rejected | token.expired
+  uid         String?  // UID صورتحساب مودیان
+  payload     String   // JSON کامل رویداد
+  signature   String?  // امضای دیجیتال دریافتی از مودیان
+  processed   Boolean  @default(false)
+  processedAt DateTime?
+  error       String?  // خطا در صورت شکست پردازش
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, eventType])
+  @@index([tenantId, processed])
+  @@index([uid])
+  @@index([createdAt])
+}
+
+// لاگ همگام‌سازی و ارسال به مودیان
+model ModianSyncLog {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  action      String   // SEND | BATCH | RECONCILE | TOKEN_REFRESH | WEBHOOK
+  direction   String   // OUTBOUND | INBOUND
+  success     Boolean
+  invoiceId   String?  // شناسه فاکتور مرتبط
+  uid         String?  // UID مودیان
+  batchSize   Int?     // تعداد فاکتورهای دسته
+  sentCount   Int?     // تعداد موفق
+  failCount   Int?     // تعداد ناموفق
+  duration    Int?     // مدت زمان به میلی‌ثانیه
+  error       String?  // پیام خطا
+  metadata    String?  // JSON اضافی
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, action])
+  @@index([tenantId, success])
+  @@index([invoiceId])
+  @@index([createdAt])
+}
+
+// ============ SESSION-7: تاریخچه نرخ ارز (نمودار نوسان بلندمدت) ============
+// ExchangeRate فقط «آخرین نرخ» را نگه می‌دارد (ردیف واحد per جفت‌ارز).
+// این جدول هر تغییر نرخ را ثبت می‌کند تا نمودار نوسان طولانی قابل رسم باشد.
+model ExchangeRateHistory {
+  id           String   @id @default(cuid())
+  fromCurrency String   // USD
+  toCurrency   String   // IRR
+  rate         Float    // 65000
+  changePercent Float?  // درصد تغییر نسبت به رکورد قبلی
+  source       String   @default("manual") // manual | api | tgju
+  recordedAt   DateTime @default(now())
+
+  @@index([fromCurrency, toCurrency, recordedAt])
+  @@index([recordedAt])
+}
+
+// ============ SESSION-7: لیست بیمه (سپید/سپاه — e-file) ============
+model InsurancePolicy {
+  id             String    @id @default(cuid())
+  tenantId       String
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  provider       String    // SEPID | SEPAH | OTHER
+  fileNumber     String    // شماره پرونده بیمه
+  branchCode     String?   // کد شعبه
+  personCount    Int       @default(1) // تعداد بیمه‌شدگان (لیست حقوق)
+  monthlyAmount  BigInt    @default(0) // حق بیمه ماهانه (ریال)
+  debtAmount     BigInt    @default(0) // بدهی معوقه (ریال)
+  status         String    @default("ACTIVE") // ACTIVE | SUSPENDED | CLOSED
+  lastPaymentDate DateTime? // آخرین پرداخت
+  nextDueDate    DateTime? // سررسید بعدی
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([tenantId, provider, fileNumber])
+  @@index([tenantId, status])
+  @@index([nextDueDate])
+}
+
+// ============ SESSION-7: اسکن رسید خرید با AI ============
+model ReceiptScan {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId      String?
+  imageUrl    String?  // مسیر فایل آپلودشده (upload/)
+  fileName    String?
+  status      String   @default("PENDING") // PENDING | PROCESSED | FAILED
+  vendor      String?  // فروشنده استخراج‌شده
+  totalAmount BigInt?   // مبلغ کل (ریال)
+  scanDate    DateTime? // تاریخ رسید
+  items       String?  // JSON: [{name, qty, unitPrice, total}]
+  rawText     String?  // متن خام OCR/VLM
+  confidence  Float?    // 0..1
+  errorMessage String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId, createdAt])
+  @@index([status])
+}
+
+// ============ SESSION-7: ایمپورت صورتحساب بانکی CSV ============
+model BankStatementImport {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  bankAccountId String?
+  fileName     String
+  rowsTotal    Int      @default(0)
+  rowsImported Int      @default(0)
+  rowsSkipped  Int      @default(0)
+  status       String   @default("PENDING") // PENDING | COMPLETED | FAILED | PARTIAL
+  errors       String?  // JSON: [{row, reason}]
+  importedBy   String?  // userId
+  createdAt    DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+}
+
+// ============ SESSION-7: گزارش‌های دوره‌ای خودکار (ایمیل) ============
+model ScheduledReport {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String   // نام گزارش
+  frequency   String   @default("WEEKLY") // DAILY | WEEKLY | MONTHLY | QUARTARTERLY
+  reportType  String   @default("DASHBOARD_SUMMARY") // DASHBOARD_SUMMARY | SALES | PURCHASES | CASHFLOW | RECEIVABLES | INSTALLMENTS
+  recipients  String   // JSON: ["email1", "email2"]
+  format      String   @default("HTML") // HTML | JSON
+  dayOfMonth  Int?     // برای MONTHLY (۱..۳۱)
+  dayOfWeek   Int?     // برای WEEKLY (۰=یکشنبه)
+  hour        Int      @default(8) // ساعت ارسال (۰..۲۳)
+  isActive    Boolean  @default(true)
+  lastRunAt   DateTime?
+  lastRunStatus String? // SUCCESS | FAILED
+  lastError   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId, isActive])
+  @@index([isActive, frequency])
+}
+
+// ============ SESSION-7: ثبت دامنه اختصاصی tenant ============
+model TenantDomain {
+  id                String    @id @default(cuid())
+  tenantId          String
+  tenant            Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  domain            String    @unique // app.example.ir
+  status            String    @default("PENDING") // PENDING | VERIFYING | VERIFIED | FAILED
+  verificationToken String    @unique
+  dnsTxtRecord      String?   // مقدار رکورد TXT برای تأیید
+  isPrimary         Boolean   @default(false)
+  verifiedAt        DateTime?
+  lastCheckedAt     DateTime?
+  notes             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([tenantId, status])
+}
+
+// ============ SESSION-7: چت زنده پشتیبانی ============
+model SupportChatSession {
+  id            String   @id @default(cuid())
+  tenantId      String?
+  tenant        Tenant?  @relation(fields: [tenantId], references: [id])
+  visitorName   String?  // نام بازدیدکننده (لاگین‌نشده)
+  visitorEmail  String?
+  userId        String?  // کاربر لاگین‌شده
+  pageUrl       String?  // صفحه شروع چت
+  status        String   @default("OPEN") // OPEN | ACTIVE | CLOSED
+  assignedTo    String?  // سوپرادمین پاسخ‌دهنده
+  lastMessageAt DateTime @default(now())
+  lastMessagePreview String? // ۸۰ کاراکتر آخر پیام
+  unreadForAgent Int    @default(0)
+  unreadForVisitor Int  @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  messages      SupportChatMessage[]
+
+  @@index([status, lastMessageAt])
+  @@index([tenantId])
+}
+
+model SupportChatMessage {
+  id          String   @id @default(cuid())
+  sessionId   String
+  session     SupportChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role        String   // visitor | agent | system
+  message     String
+  attachments String?  // JSON: [{url, name, size}]
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([sessionId, createdAt])
+}
+
+// ============ SESSION-7: لاگ تحویل وب‌هوک (تغییر قیمت و رویدادها) ============
+model WebhookDelivery {
+  id          String   @id @default(cuid())
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
+  webhookId   String?  // رفرنس به Webhook.id
+  event       String   // price.updated | invoice.created | ...
+  endpointUrl String
+  payload     String   // JSON ارسال‌شده
+  statusCode  Int?
+  responseMs  Int?     // زمان پاسخ
+  success     Boolean  @default(false)
+  error       String?
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([webhookId, createdAt])
+}
+
+// ─── تبلیغات (Advertising) — نمایش در داشبورد کاربران ────────────────
+model Advertisement {
+  id            String    @id @default(cuid())
+  title         String
+  type          String    @default("BANNER") // BANNER | HTML | TEXT
+  imageUrl      String?   // مسیر تصویر بنر (مثل /uploads/ads-*)
+  htmlCode      String?   // کد HTML — در iframe ایزوله رندر می‌شود
+  text          String?   // متن تبلیغ (TEXT)
+  linkUrl       String?
+  ctaText       String?   // برچسب دکمه
+  ctaColor      String?   // رنگ تم دکمه (پیش‌فرض emerald)
+  active        Boolean   @default(true)
+  priority      Int       @default(0) // بالاتر = زودتر
+  targetType    String    @default("ALL") // ALL | SPECIFIC
+  targetUserIds String?   // JSON آرایه‌ی userId برای SPECIFIC
+  placement     String    @default("DASHBOARD_TOP")
+  height        String?   // ارتفاع پیکسلی: "90" | "160" | "250"
+  views         Int       @default(0)
+  clicks        Int       @default(0)
+  startAt       DateTime? // شروع نمایش (اختیاری)
+  endAt         DateTime? // پایان نمایش (اختیاری)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([active, priority])
+  @@index([targetType])
+}
+
+// ─── Task 3-b — کامنت داخلی تیم پشتیبانی روی هر tenant ────────────────
+// یادداشت داخلی سوپرادمین‌ها درباره هر سازمان (تنها برای تیم پشتیبانی؛
+// کاربران سازمان هرگز نمی‌بینند). طبق قواعد این تسک بدون FK — tenantId و
+// superAdminId به‌صورت رشته نگه داشته می‌شوند تا حذف سازمان/ادمین رکوردها
+// را نشکند (همان سبک no-FK بخش‌های اخیر اسکیما). authorName denormalized
+// برای نمایش سریع بدون join.
+model TenantComment {
+  id            String   @id @default(cuid())
+  tenantId      String
+  superAdminId  String?
+  authorName    String   @default("پشتیبانی")
+  body          String
+  createdAt     DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([superAdminId])
+}
+
+// ─── Task 3-d — رجیستری نسخه‌های اپلیکیشن (changelog) ────────────────
+// نسخه‌های منتشرشده + اقلام تغییرات هر نسخه (ویژگی/بهبود/رفع باگ) که
+// سوپرادمین از تب «نسخه‌ها و اطلاع‌رسانی» ثبت می‌کند و می‌تواند با یک
+// کلیک به‌صورت پیام درون‌برنامه‌ای + اعلان به کاربران ارسال کند.
+// itemsJson: آرایهٔ JSON رشته‌ای [{title, description, type}] — طبق قواعد
+// پروژه لیست‌ها به‌صورت JSON string نگه داشته می‌شوند. بدون FK (سبک no-FK).
+model AppVersion {
+  id         String   @id @default(cuid())
+  version    String   @unique // مثل 12.9.0
+  title      String
+  releasedAt DateTime @default(now())
+  itemsJson  String   @default("[]")
+  notified   Boolean  @default(false) // آیا اطلاع‌رسانی نسخه ارسال شده؟
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([releasedAt])
+}
+
+// ─── Task 6-a — پیکربندی چیدمان سایدبار پنل کاربران (سوپرادمین) ──────
+// ترتیب + نمایش/مخفی‌سازی آیتم‌های سایدبار پنل کاربر از پنل سوپرادمین
+// با drag & drop. itemsJson: [{id, visible, group}] به‌ترتیب نمایش.
+// scope فعلاً فقط "user-panel" (برای وایت‌لیبل آینده tenantId هم دارد).
+// بدون FK (سبک no-FK پروژه). یک رکورد per scope — upsert در API.
+model SidebarConfig {
+  id         String   @id @default(cuid())
+  scope      String   @unique @default("user-panel")
+  tenantId   String?  // null = همهٔ tenantها (پیش‌فرض پلتفرم)
+  itemsJson  String   @default("[]")
+  updatedAt  DateTime @updatedAt
+  createdAt  DateTime @default(now())
+
+  @@index([scope])
+}
+
+// ─── Task 6-b — قانون‌های تخفیف خودکار اشتراک ─────────────────────────
+// موتور تخفیف: قانون‌هایی مثل «۲۰٪ تخفیف پرداخت سالانه» یا «۱۵٪ تخفیف
+// کاربران راکد ۳۰+ روزه». conditionType تعیین می‌کند قانون کِی فعال شود.
+// WITHOUT FK — ارزیابی در lib/discount-rules.ts هنگام checkout/subscribe.
+model DiscountRule {
+  id             String   @id @default(cuid())
+  name           String
+  // نوع تخفیف: PERCENT (درصد) | FIXED (تومان کسر می‌شود) | TRIAL_DAYS (روز رایگان اضافه)
+  kind           String   @default("PERCENT")
+  value          Float    @default(0)
+  // شرط فعال‌سازی: ANNUAL_PAY (پرداخت سالانه) | INACTIVE_DAYS (کاربر راکد)
+  // | NEW_USER (کاربر تازه) | PLAN (پلن خاص) | TENURE_DAYS (قدمت حساب)
+  conditionType  String   @default("ANNUAL_PAY")
+  conditionValue Float    @default(0)
+  // پلن‌هایی که قانون رویشان اعمال می‌شود (JSON array of plan ids; [] = همه)
+  planIdsJson    String   @default("[]")
+  // حداکثر مبلغ تخفیف (تومان) — 0 = بدون سقف؛ فقط برای kind=PERCENT
+  maxAmountToman Float    @default(0)
+  priority       Int      @default(0) // بالاتر = زودتر ارزیابی
+  stackable      Boolean  @default(false) // قابل ترکیب با تخفیف‌های دیگر؟
+  active         Boolean  @default(true)
+  usageCount     Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([active, priority])
+}
+
+// ─── Task 6-c — آزمایش A/B قیمت‌گذاری ────────────────────────────────
+// آزمایش قیمت روی گروه‌های کاربر: کاربران deterministic به variant تخصیص
+// می‌یابند (hash userId → bucket). variantA = کنترل (قیمت فعلی).
+// metricsJson: {visitsA, visitsB, signupsA, signupsB, revenueAToman, revenueBToman}
+model PriceExperiment {
+  id           String   @id @default(cuid())
+  name         String
+  planId       String   @default("pro")
+  // وضعیت: RUNNING | PAUSED | COMPLETED
+  status       String   @default("RUNNING")
+  // قیمت variantA (کنترل — تومان)
+  priceAToman  Float
+  // قیمت variantB (تست — تومان)
+  priceBToman  Float
+  // درصد تخصیص به variantB (0-100)
+  splitPercent Int      @default(50)
+  metricsJson  String   @default("{}")
+  startedAt    DateTime @default(now())
+  endedAt      DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([status])
+}
+
+// ============ v22: خبرنامهٔ ایمیلی ============
+// ثبت‌نام عمومی از فرم لندینگ (بدون احراز هویت) + مدیریت در پنل سوپرادمین
+model NewsletterSubscriber {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  status      String   @default("ACTIVE") // ACTIVE | UNSUBSCRIBED | BLOCKED
+  source      String   @default("landing-footer") // landing | calculators | moadian | manual
+  name        String?
+  ipHash      String? // هش IP برای ضدتقلب (ذخیرهٔ خام نه)
+  lastEmailAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status, createdAt])
+}
+
+// ============ v34: شماره‌های خبرنامهٔ هفتگی (#۱۶) ============
+// ثبت هر ارسال خبرنامه (خودکار هفتگی / دستی / آزمایشی) برای:
+//  - جلوگیری از ارسال دوباره در همان هفته (گارد کرون)
+//  - نمایش تاریخچهٔ «شماره‌های ارسال‌شده» در پنل سوپرادمین
+model NewsletterIssue {
+  id             String    @id @default(cuid())
+  subject        String
+  html           String
+  // JSON آرایهٔ اسلاگ پست‌های همان شماره: ["slug-a","slug-b"]
+  postSlugs      String    @default("[]")
+  recipientCount Int       @default(0) // تعداد گیرندگان هدف
+  sentCount      Int       @default(0) // ارسال موفق
+  failedCount    Int       @default(0) // ارسال ناموفق
+  // auto = کرون هفتگی | manual = کمپین دستی پنل | test = آزمایشی به سوپرادمین
+  mode           String    @default("auto")
+  createdAt      DateTime  @default(now())
+  sentAt         DateTime?
+  // یادداشت فرستنده (مثلاً هشدار حالت mock در نبود SMTP)
+  senderNote     String?
+
+  @@index([mode, createdAt])
+}
+
+// ============ v28: آمار بازدید ویجت‌های قابل embed ============
+// شمارش بازدید ویجت‌های شرکا (plan-quiz / tax-calculator / financial-health / ...)
+// برای تحلیل کانال توزیع (کدام سایت‌ها ویجت را نصب کرده‌اند و چه بازدیدی می‌آورند)
+// و نمایش در پنل سوپرادمین — حلقهٔ بازخورد برنامهٔ شراکت.
+model WidgetView {
+  id        String   @id @default(cuid())
+  // نوع ویجت: plan-quiz | tax-calculator | financial-health | invoice | payment | booking
+  widget    String
+  // دامنهٔ میزبان iframe (بدون پروتکل) — «direct» برای بازدید مستقیم صفحهٔ embed
+  host      String   @default("direct")
+  // مسیر کامل صفحهٔ میزبان اگر مرورگر ارسال کند (برای گزارش دقیق‌تر)
+  referrer  String?
+  createdAt DateTime @default(now())
+
+  @@index([widget, createdAt])
+  @@index([host])
+}
+
+// ============ v29: درخواست‌های برنامهٔ شراکت هوش ============
+// فرم عمومی /partners → ثبت درخواست همکاری (نمایندگان، حسابداران،
+// مشاوران، بلاگرها، شتاب‌دهنده‌ها) + مدیریت در پنل سوپرادمین.
+// چرخهٔ وضعیت: NEW → CONTACTED → APPROVED / REJECTED
+model PartnerRequest {
+  id        String   @id @default(cuid())
+  // اطلاعات تماس
+  name      String
+  phone     String
+  email     String?
+  company   String?
+  city      String?
+  website   String?
+  // پروفایل همکاری
+  // audience: accountant | consultant | blogger | agency | incubator | other
+  audience  String   @default("other")
+  // channel: how they plan to refer (widgets | content | seminars | direct | other)
+  channel   String   @default("other")
+  // بازدید ماهانهٔ سایت/شبکه (تخمینی)
+  monthlyVisitors Int?
+  message   String?
+  // مدیریت
+  status    String   @default("NEW") // NEW | CONTACTED | APPROVED | REJECTED
+  notes     String?
+  ipHash    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([email])
+}
+
+// ============ v32: سیستم کدهای تخفیف (Coupon) ============
+// کدهای تخفیف قابل‌واردکردن در چک‌اوت — برخلاف DiscountRule (خودکار و بدون
+// کد) این‌ها را کاربر باید وارد کند. اعمال AFTER تخفیف‌های خودکار است.
+model Coupon {
+  id               String    @id @default(cuid())
+  // کد یکتا — حروف بزرگ انگلیسی و رقم (۴ تا ۲۰ کاراکتر)
+  code             String    @unique
+  // نوع: PERCENT (درصد) | FIXED (مبلغ ثابت به تومان)
+  type             String
+  // درصد (۱-۱۰۰) یا مبلغ تومان
+  value            Float
+  // سقف تخفیف برای PERCENT (تومان) — null = بدون سقف
+  maxDiscountToman Float?
+  // حداقل مبلغ سبد (تومان) — null = بدون شرط
+  minAmountToman   Float?
+  // CSV محدودیت پلن‌ها (خالی = همهٔ پلن‌ها)
+  planIds          String?
+  // ۰ = نامحدود
+  maxUses          Int       @default(0)
+  usedCount        Int       @default(0)
+  // سقف استفاده به‌ازای هر کاربر/سازمان — ۰ = نامحدود
+  perUserLimit     Int       @default(1)
+  // فقط کاربران بدون لایسنس فعال
+  firstTimeOnly    Boolean   @default(false)
+  startsAt         DateTime?
+  expiresAt        DateTime?
+  active           Boolean   @default(true)
+  note             String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  redemptions CouponRedemption[]
+
+  @@index([active])
+  @@index([code])
+}
+
+// هر استفادهٔ موفق (صدور لایسنس در verify) یک رکورد — برای سقف کاربر و گزارش
+model CouponRedemption {
+  id            String   @id @default(cuid())
+  couponId      String
+  coupon        Coupon   @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  tenantId      String?
+  userEmail     String?
+  // مبلغ تخفیف اعطاشده در این استفاده (تومان)
+  amountToman   Float
+  invoiceNumber String?
+  createdAt     DateTime @default(now())
+
+  @@index([couponId])
+  @@index([tenantId])
+  @@index([userEmail])
+}
